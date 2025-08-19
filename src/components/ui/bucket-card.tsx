@@ -1,0 +1,86 @@
+import * as React from "react"
+import { cn } from "@/lib/utils"
+import { Progress } from "@/components/ui/progress"
+
+export interface BucketCardProps extends React.HTMLAttributes<HTMLDivElement> {
+  title: string
+  currentAmount: number
+  targetAmount: number
+  apy?: number
+  backgroundColor?: string
+}
+
+const BucketCard = React.forwardRef<HTMLDivElement, BucketCardProps>(
+  ({ 
+    className, 
+    title, 
+    currentAmount, 
+    targetAmount, 
+    apy = 3.5, 
+    backgroundColor = "#B6F3AD",
+    ...props 
+  }, ref) => {
+    const progress = Math.min((currentAmount / targetAmount) * 100, 100)
+    
+    // Function to darken the background color
+    const darkenColor = (color: string, amount: number = 0.1) => {
+      const hex = color.replace('#', '')
+      const r = parseInt(hex.substring(0, 2), 16)
+      const g = parseInt(hex.substring(2, 4), 16)
+      const b = parseInt(hex.substring(4, 6), 16)
+      
+      const newR = Math.max(0, Math.floor(r * (1 - amount)))
+      const newG = Math.max(0, Math.floor(g * (1 - amount)))
+      const newB = Math.max(0, Math.floor(b * (1 - amount)))
+      
+      return `rgb(${newR}, ${newG}, ${newB})`
+    }
+    
+    return (
+      <div
+        ref={ref}
+        className={cn(
+          "p-8 rounded-[32px] cursor-pointer transition-all duration-300 ease-out",
+          className
+        )}
+        style={{ 
+          backgroundColor
+        } as React.CSSProperties}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.backgroundColor = darkenColor(backgroundColor, 0.08)
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.backgroundColor = backgroundColor
+        }}
+        {...props}
+      >
+        {/* Header with title */}
+        <div className="mb-1">
+          <h3 className="text-[20px] font-bold tracking-tight text-black">
+            {title}
+          </h3>
+        </div>
+        
+        {/* Amount section */}
+        <div className="mb-6">
+          <div className="flex items-baseline gap-1">
+            <span className="text-[32px] font-semibold tracking-tight text-black">
+              ${currentAmount.toLocaleString()}
+            </span>
+            <span className="text-[32px] font-semibold tracking-tight text-black/40">
+              of ${targetAmount.toLocaleString()}
+            </span>
+          </div>
+        </div>
+        
+        {/* Progress bar */}
+        <div>
+          <Progress value={progress} max={100} className="w-full" backgroundColor={backgroundColor} />
+        </div>
+      </div>
+    )
+  }
+)
+BucketCard.displayName = "BucketCard"
+
+export { BucketCard }
