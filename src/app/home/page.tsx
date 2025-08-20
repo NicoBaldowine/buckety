@@ -6,6 +6,7 @@ import { AvatarDropdown } from "@/components/ui/avatar-dropdown"
 import { Info } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useState, useEffect, useRef } from "react"
+import { HybridStorage } from "@/lib/hybrid-storage"
 
 const defaultBuckets = [
   {
@@ -63,72 +64,33 @@ export default function HomePage() {
   const [showStickyHeader, setShowStickyHeader] = useState(false)
   const headerRef = useRef<HTMLDivElement>(null)
   const [buckets, setBuckets] = useState<typeof defaultBuckets>([])
-  const mainBucketRef = useRef<HTMLDivElement>(null)
-  const titleRef = useRef<HTMLHeadingElement>(null)
-  const amountRef = useRef<HTMLSpanElement>(null)
   const [totalBalance, setTotalBalance] = useState(0)
-  const mainBucketAmount = 1200.00
+  const [mainBucketAmount, setMainBucketAmount] = useState(1200.00)
 
-  // Set initial dark mode background and monitor changes
+  // Remove complex theme management - using CSS classes instead
+
+  // Initialize from database on mount (hybrid approach)
   useEffect(() => {
-    const updateMainBucketTheme = () => {
-      if (mainBucketRef.current) {
-        const theme = document.documentElement.getAttribute('data-theme')
-        console.log('Current theme:', theme) // Debug log
-        const isDark = theme === 'dark'
-        const backgroundColor = isDark ? '#272727' : '#F4F4F4'
-        const textColor = isDark ? '#ffffff' : '#000000'
-        console.log('Setting background to:', backgroundColor, 'text to:', textColor) // Debug log
-        
-        mainBucketRef.current.style.backgroundColor = backgroundColor
-        
-        if (titleRef.current) {
-          titleRef.current.style.color = textColor
-        }
-        if (amountRef.current) {
-          amountRef.current.style.color = textColor
-        }
+    const initializeData = async () => {
+      // Load data from database to localStorage
+      await HybridStorage.initializeFromDatabase()
+      
+      // Load buckets from localStorage (now synced with database)
+      const localBuckets = HybridStorage.getLocalBuckets()
+      if (localBuckets.length > 0) {
+        setBuckets(localBuckets)
+      } else {
+        // First time user - set default buckets (keep for now)
+        setBuckets(defaultBuckets)
+        localStorage.setItem('buckets', JSON.stringify(defaultBuckets))
       }
-    }
-    
-    // Set initial theme immediately and also with delay
-    updateMainBucketTheme()
-    const timeout = setTimeout(updateMainBucketTheme, 100)
-    const timeout2 = setTimeout(updateMainBucketTheme, 500)
-    
-    // Listen for theme changes using data-theme attribute
-    const observer = new MutationObserver(() => {
-      setTimeout(updateMainBucketTheme, 10)
-    })
-    observer.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ['data-theme']
-    })
-    
-    // Also listen for storage events in case theme is changed in another tab
-    const handleStorageChange = () => {
-      setTimeout(updateMainBucketTheme, 10)
-    }
-    window.addEventListener('storage', handleStorageChange)
-    
-    return () => {
-      clearTimeout(timeout)
-      clearTimeout(timeout2)
-      observer.disconnect()
-      window.removeEventListener('storage', handleStorageChange)
-    }
-  }, [])
 
-  // Load buckets from localStorage on mount
-  useEffect(() => {
-    const savedBuckets = localStorage.getItem('buckets')
-    if (savedBuckets) {
-      setBuckets(JSON.parse(savedBuckets))
-    } else {
-      // First time user - set default buckets
-      setBuckets(defaultBuckets)
-      localStorage.setItem('buckets', JSON.stringify(defaultBuckets))
+      // Load main bucket amount from hybrid storage
+      const mainBucket = HybridStorage.getLocalMainBucket()
+      setMainBucketAmount(mainBucket.currentAmount)
     }
+    
+    initializeData()
   }, [])
 
   // Save buckets to localStorage whenever buckets change
@@ -145,21 +107,25 @@ export default function HomePage() {
     setTotalBalance(total)
   }, [buckets, mainBucketAmount])
 
-  // Check for new bucket from create page (runs after buckets are loaded)
+  // Refresh buckets when returning from other pages (to catch new buckets created via HybridStorage)
   useEffect(() => {
-    if (buckets.length === 0) return // Wait for buckets to be loaded first
-    
-    const newBucketData = localStorage.getItem('newBucket')
-    if (newBucketData) {
-      const newBucket = JSON.parse(newBucketData)
-      
-      // Add to top of buckets
-      setBuckets(prevBuckets => [newBucket, ...prevBuckets])
-      
-      // Clean up localStorage
-      localStorage.removeItem('newBucket')
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        // Refresh from localStorage when page becomes visible
+        const localBuckets = HybridStorage.getLocalBuckets()
+        if (localBuckets.length > 0) {
+          setBuckets(localBuckets)
+        }
+        
+        // Also refresh main bucket amount
+        const mainBucket = HybridStorage.getLocalMainBucket()
+        setMainBucketAmount(mainBucket.currentAmount)
+      }
     }
-  }, [buckets.length]) // Depend on buckets.length to run after initial load
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
+  }, [])
 
   const handleBucketClick = (bucket: typeof buckets[0]) => {
     const params = new URLSearchParams({
@@ -262,26 +228,15 @@ export default function HomePage() {
 
         {/* Main Bucket Card */}
         <div 
-          ref={mainBucketRef}
-          className="p-8 rounded-[32px] mb-4 cursor-pointer transition-all duration-300 ease-out hover:brightness-95"
+          className="p-8 rounded-[32px] mb-4 cursor-pointer transition-all duration-300 ease-out relative z-0 main-bucket-card"
           style={{ 
             animation: 'fadeInUp 0.6s ease-out 0s both'
-          }}
-          onMouseEnter={(e) => {
-            const theme = document.documentElement.getAttribute('data-theme')
-            const isDark = theme === 'dark'
-            e.currentTarget.style.backgroundColor = isDark ? '#1F1F1F' : '#E5E7EB'
-          }}
-          onMouseLeave={(e) => {
-            const theme = document.documentElement.getAttribute('data-theme')
-            const isDark = theme === 'dark'
-            e.currentTarget.style.backgroundColor = isDark ? '#272727' : '#F4F4F4'
           }}
           onClick={() => {
             const params = new URLSearchParams({
               id: 'main-bucket',
               title: 'Main Bucket',
-              currentAmount: '1200.00',
+              currentAmount: mainBucketAmount.toString(),
               targetAmount: '1200.00',
               backgroundColor: '#E5E7EB',
               apy: '0'
@@ -293,7 +248,7 @@ export default function HomePage() {
             <div className="flex-1">
               {/* Header with title */}
               <div className="mb-1">
-                <h3 ref={titleRef} className="text-[20px] font-bold tracking-tight" style={{ color: '#000' }}>
+                <h3 className="text-[20px] font-bold tracking-tight text-foreground">
                   Main Bucket 🏦
                 </h3>
               </div>
@@ -301,8 +256,8 @@ export default function HomePage() {
               {/* Amount section - single amount only */}
               <div>
                 <div className="flex items-baseline gap-1">
-                  <span ref={amountRef} className="text-[32px] font-semibold tracking-tight" style={{ color: '#000' }}>
-                    $1,200.00
+                  <span className="text-[32px] font-semibold tracking-tight text-foreground">
+                    ${mainBucketAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </span>
                 </div>
               </div>
@@ -316,9 +271,9 @@ export default function HomePage() {
                   e.stopPropagation()
                   // Handle add balance action
                 }}
-                className="bg-transparent border border-black/20 text-black hover:bg-black/5 dark:border-white/20 dark:text-white dark:hover:bg-white/5"
+                className="main-bucket-button"
               >
-                Add balance
+                Add funds
               </Button>
             </div>
           </div>

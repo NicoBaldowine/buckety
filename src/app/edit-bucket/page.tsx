@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label"
 import { ArrowLeft } from "lucide-react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useState, useEffect, Suspense } from "react"
+import { HybridStorage } from "@/lib/hybrid-storage"
 
 function EditBucketContent() {
   const router = useRouter()
@@ -84,36 +85,27 @@ function EditBucketContent() {
     return selected ? selected.name : ""
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
     const bucketId = searchParams.get('id')
     if (!bucketId) return
     
-    // Get current buckets from localStorage
-    const savedBuckets = localStorage.getItem('buckets')
-    if (savedBuckets) {
-      const buckets = JSON.parse(savedBuckets)
-      
-      // Find and update the bucket
-      const updatedBuckets = buckets.map((bucket: any) => {
-        if (bucket.id === bucketId) {
-          return {
-            ...bucket,
-            title: bucketName,
-            targetAmount: parseFloat(targetAmount.replace(/,/g, '')) || bucket.targetAmount,
-            backgroundColor: selectedColor
-          }
-        }
-        return bucket
-      })
-      
-      // Save back to localStorage
-      localStorage.setItem('buckets', JSON.stringify(updatedBuckets))
-    }
+    // Use hybrid storage to update both localStorage and database
+    const success = await HybridStorage.updateBucket(bucketId, {
+      title: bucketName,
+      targetAmount: parseFloat(targetAmount.replace(/,/g, '')) || 0,
+      backgroundColor: selectedColor
+    })
     
-    // Navigate back to home
-    router.push('/home')
+    if (success) {
+      console.log('✅ Bucket updated successfully:', bucketName)
+      // Navigate back to home
+      router.push('/home')
+    } else {
+      console.error('❌ Failed to update bucket')
+      // Could show an error toast here
+    }
   }
 
   return (

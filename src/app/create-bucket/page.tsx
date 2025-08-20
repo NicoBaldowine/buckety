@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label"
 import { ArrowLeft } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useState } from "react"
+import { HybridStorage } from "@/lib/hybrid-storage"
 
 export default function CreateBucketPage() {
   const router = useRouter()
@@ -72,24 +73,25 @@ export default function CreateBucketPage() {
     return selected ? selected.name : ""
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
-    // Create new bucket object
-    const newBucket = {
-      id: `bucket-${Date.now()}`,
+    // Create bucket using hybrid storage (localStorage + database + activity logging)
+    const bucketId = await HybridStorage.createBucket({
       title: bucketName,
-      currentAmount: 0,
       targetAmount: parseFloat(targetAmount.replace(/,/g, '')) || 0,
-      apy: 3.5, // Default APY for new buckets
-      backgroundColor: selectedColor
+      backgroundColor: selectedColor,
+      apy: 3.5 // Default APY for new buckets
+    })
+    
+    if (bucketId) {
+      console.log('✅ Bucket created successfully:', bucketName)
+      // Navigate to home to see the new bucket
+      router.push('/home')
+    } else {
+      console.error('❌ Failed to create bucket')
+      // Could show an error toast here
     }
-    
-    // Store in localStorage to pass to home page
-    localStorage.setItem('newBucket', JSON.stringify(newBucket))
-    
-    // Navigate to home
-    router.push('/home')
   }
 
   return (

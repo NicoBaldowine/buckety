@@ -5,6 +5,7 @@ import { Modal } from "@/components/ui/modal"
 import { ArrowLeft } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useState, useRef, useEffect } from "react"
+import { HybridStorage } from "@/lib/hybrid-storage"
 
 interface Account {
   id: string
@@ -115,11 +116,15 @@ export default function AddMoneyPage() {
     const savedBuckets = localStorage.getItem('buckets')
     if (savedBuckets) {
       const buckets = JSON.parse(savedBuckets)
+      
+      // Get main bucket from hybrid storage instead of hardcoding
+      const mainBucket = HybridStorage.getLocalMainBucket()
+      
       const allAccounts: Account[] = [
         {
           id: 'main-bucket',
           title: 'Main Bucket',
-          currentAmount: 1200.00
+          currentAmount: mainBucket.currentAmount
         },
         ...buckets.map((bucket: any) => ({
           id: bucket.id,
@@ -169,59 +174,47 @@ export default function AddMoneyPage() {
     }
   }
 
-  const handleConvert = () => {
+  const handleConvert = async () => {
     if (!fromAccount || !toAccount || !amount || hasInsufficientBalance) return
 
     const transferAmount = parseFloat(amount.replace(/[^\d.]/g, ''))
     if (isNaN(transferAmount) || transferAmount <= 0) return
 
-    // Update buckets in localStorage
-    const savedBuckets = localStorage.getItem('buckets')
-    if (savedBuckets) {
-      const buckets = JSON.parse(savedBuckets)
+    try {
+      // Use hybrid storage for proper database + localStorage sync
+      const result = await HybridStorage.transferMoney(fromAccount.id, toAccount.id, transferAmount)
       
-      // Update the buckets
-      const updatedBuckets = buckets.map((bucket: any) => {
-        if (bucket.id === fromAccount.id && fromAccount.id !== 'main-bucket') {
-          // Subtract from source bucket
-          return { ...bucket, currentAmount: Math.max(0, bucket.currentAmount - transferAmount) }
-        } else if (bucket.id === toAccount.id && toAccount.id !== 'main-bucket') {
-          // Add to destination bucket
-          return { ...bucket, currentAmount: bucket.currentAmount + transferAmount }
-        }
-        return bucket
-      })
-      
-      localStorage.setItem('buckets', JSON.stringify(updatedBuckets))
-    }
-
-    // Store transfer details for animation
-    localStorage.setItem('transferDetails', JSON.stringify({
-      amount: transferAmount,
-      fromAccount: fromAccount.title,
-      toAccount: toAccount.title,
-      timestamp: Date.now()
-    }))
-
-    // Navigate to destination bucket details if it's not main bucket
-    if (toAccount.id !== 'main-bucket') {
-      const bucket = JSON.parse(savedBuckets || '[]').find((b: any) => b.id === toAccount.id)
-      if (bucket) {
-        const params = new URLSearchParams({
-          id: bucket.id,
-          title: bucket.title,
-          currentAmount: (bucket.currentAmount + transferAmount).toString(),
-          targetAmount: bucket.targetAmount.toString(),
-          backgroundColor: bucket.backgroundColor,
-          apy: bucket.apy.toString(),
-          showTransfer: 'true',
-          transferAmount: transferAmount.toString()
-        })
-        router.push(`/bucket-details?${params.toString()}`)
+      if (!result.success) {
+        console.error('Transfer failed:', result.error)
+        return
       }
-    } else {
-      // If transferring to main bucket, go to home
-      router.push('/home')
+
+      console.log('✅ Transfer successful!')
+
+      // Navigate to destination bucket details with transfer indicator
+      if (toAccount.id !== 'main-bucket') {
+        // Get updated bucket data from localStorage (now synced with database)
+        const localBuckets = HybridStorage.getLocalBuckets()
+        const bucket = localBuckets.find((b: any) => b.id === toAccount.id)
+        
+        if (bucket) {
+          const params = new URLSearchParams({
+            id: bucket.id,
+            title: bucket.title,
+            currentAmount: bucket.currentAmount.toString(),
+            targetAmount: bucket.targetAmount.toString(),
+            backgroundColor: bucket.backgroundColor,
+            apy: bucket.apy.toString(),
+            fromTransfer: 'true' // Changed from showTransfer to fromTransfer for better detection
+          })
+          router.push(`/bucket-details?${params.toString()}`)
+        }
+      } else {
+        // If transferring to main bucket, go to home
+        router.push('/home')
+      }
+    } catch (error) {
+      console.error('Transfer error:', error)
     }
   }
 
@@ -260,8 +253,8 @@ export default function AddMoneyPage() {
             </div>
             <div className="text-[16px] font-semibold text-foreground" style={{ letterSpacing: '-0.03em' }}>
               {fromAccount?.targetAmount 
-                ? `$${fromAccount.currentAmount.toLocaleString()} of $${fromAccount.targetAmount.toLocaleString()}`
-                : `$${fromAccount?.currentAmount.toLocaleString() || '0.00'}`
+                ? `$${fromAccount.currentAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} of $${fromAccount.targetAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                : `$${fromAccount?.currentAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0.00'}`
               }
             </div>
           </button>
@@ -281,8 +274,8 @@ export default function AddMoneyPage() {
             </div>
             <div className="text-[16px] font-semibold text-foreground" style={{ letterSpacing: '-0.03em' }}>
               {toAccount?.targetAmount 
-                ? `$${toAccount.currentAmount.toLocaleString()} of $${toAccount.targetAmount.toLocaleString()}`
-                : `$${toAccount?.currentAmount.toLocaleString() || '0.00'}`
+                ? `$${toAccount.currentAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} of $${toAccount.targetAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                : `$${toAccount?.currentAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0.00'}`
               }
             </div>
           </button>
@@ -373,8 +366,8 @@ export default function AddMoneyPage() {
               </div>
               <div className="text-[16px] font-semibold text-foreground" style={{ letterSpacing: '-0.03em' }}>
                 {account.targetAmount 
-                  ? `$${account.currentAmount.toLocaleString()} of $${account.targetAmount.toLocaleString()}`
-                  : `$${account.currentAmount.toLocaleString()}`
+                  ? `$${account.currentAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} of $${account.targetAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                  : `$${account.currentAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
                 }
               </div>
             </button>

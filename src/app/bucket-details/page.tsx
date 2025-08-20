@@ -7,11 +7,65 @@ import { DropdownMenu, DropdownMenuItem } from "@/components/ui/dropdown-menu"
 import { ArrowLeft, MoreVertical, Edit, Trash2, Plus, ArrowUpFromLine, Repeat } from "lucide-react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Suspense, useState, useEffect } from "react"
+import { HybridStorage } from "@/lib/hybrid-storage"
+import { type Activity } from "@/lib/supabase"
+
+// Determine if activity should show an amount
+function shouldShowAmount(activity: Activity): boolean {
+  // Non-monetary activities that shouldn't show amounts
+  const nonMonetaryActivityTypes = ['bucket_created']
+  const nonMonetaryTitles = ['Bucket created', 'Account opened', 'Settings updated']
+  
+  return !nonMonetaryActivityTypes.includes(activity.activity_type) && 
+         !nonMonetaryTitles.includes(activity.title) &&
+         activity.amount !== 0
+}
+
+// Transform activity titles to simple "From X To Y" format
+function transformActivityTitle(activity: Activity): string {
+  // If already using new format, return as-is
+  if (activity.title.startsWith('From ') && activity.title.includes(' To ')) {
+    return activity.title
+  }
+  
+  // Transform based on activity type and available data
+  switch (activity.title) {
+    case 'Money transfer':
+    case 'Received from Main Bucket':
+      if (activity.from_source) {
+        return `From ${activity.from_source}`
+      }
+      return activity.title
+    
+    case 'Money transfer out':
+    case 'Transfer to savings bucket':
+      if (activity.to_destination) {
+        return `To ${activity.to_destination}`
+      }
+      return activity.title
+    
+    // Handle new format activities that might have "Received from" or "Moved to"
+    default:
+      if (activity.title.startsWith('Received from ')) {
+        const source = activity.title.replace('Received from ', '')
+        return `From ${source}`
+      }
+      if (activity.title.startsWith('Moved to ')) {
+        const destination = activity.title.replace('Moved to ', '')
+        return `To ${destination}`
+      }
+      
+      return activity.title
+  }
+}
 
 function BucketDetailsContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [newActivity, setNewActivity] = useState<any>(null)
+  const [activities, setActivities] = useState<Activity[]>([])
+  const [loadingActivities, setLoadingActivities] = useState(true)
+  const [actualCurrentAmount, setActualCurrentAmount] = useState<number | null>(null)
 
   const handleDeleteBucket = () => {
     const bucketId = searchParams.get('id')
@@ -32,43 +86,58 @@ function BucketDetailsContent() {
   
   // Get bucket data from URL parameters
   const bucketData = {
+    id: searchParams.get('id') || '',
     title: searchParams.get('title') || "Vacation Fund",
-    currentAmount: parseInt(searchParams.get('currentAmount') || '1250'),
-    targetAmount: parseInt(searchParams.get('targetAmount') || '3000'),
+    currentAmount: parseFloat(searchParams.get('currentAmount') || '1250'),
+    targetAmount: parseFloat(searchParams.get('targetAmount') || '3000'),
     backgroundColor: searchParams.get('backgroundColor') || "#B6F3AD",
-    apy: parseFloat(searchParams.get('apy') || '3.8'),
-    activities: [
-      {
-        id: 1,
-        title: "Monthly transfer",
-        date: "Dec 15, 2024",
-        amount: "+$200"
-      },
-      {
-        id: 2,
-        title: "Bonus allocation",
-        date: "Dec 10, 2024", 
-        amount: "+$500"
-      },
-      {
-        id: 3,
-        title: "Weekly savings",
-        date: "Dec 8, 2024",
-        amount: "+$50"
-      },
-      {
-        id: 4,
-        title: "Initial deposit",
-        date: "Dec 1, 2024",
-        amount: "+$500"
-      }
-    ]
+    apy: parseFloat(searchParams.get('apy') || '3.8')
   }
+
+  // Load actual current amount from localStorage/hybrid storage
+  useEffect(() => {
+    const loadActualAmount = () => {
+      if (bucketData.id === 'main-bucket') {
+        const mainBucket = HybridStorage.getLocalMainBucket()
+        setActualCurrentAmount(mainBucket.currentAmount)
+      } else {
+        const buckets = HybridStorage.getLocalBuckets()
+        const bucket = buckets.find((b: any) => b.id === bucketData.id)
+        if (bucket) {
+          setActualCurrentAmount(bucket.currentAmount)
+        }
+      }
+    }
+    
+    loadActualAmount()
+  }, [bucketData.id])
+
+  // Load activities from database
+  useEffect(() => {
+    const loadActivities = async () => {
+      if (bucketData.id) {
+        setLoadingActivities(true)
+        try {
+          const bucketActivities = await HybridStorage.getBucketActivities(bucketData.id)
+          setActivities(bucketActivities)
+        } catch (error) {
+          console.error('Error loading activities:', error)
+          setActivities([])
+        } finally {
+          setLoadingActivities(false)
+        }
+      }
+    }
+    
+    loadActivities()
+  }, [bucketData.id])
 
   const [animatedCurrentAmount, setAnimatedCurrentAmount] = useState(0)
   const [animatedProgress, setAnimatedProgress] = useState(0)
   
-  const finalProgress = Math.min((bucketData.currentAmount / bucketData.targetAmount) * 100, 100)
+  // Use actual current amount if available, otherwise fall back to URL parameter
+  const displayCurrentAmount = actualCurrentAmount !== null ? actualCurrentAmount : bucketData.currentAmount
+  const finalProgress = Math.min((displayCurrentAmount / bucketData.targetAmount) * 100, 100)
 
   // Check for transfer and add new activity
   useEffect(() => {
@@ -89,7 +158,7 @@ function BucketDetailsContent() {
         id: Date.now(),
         title: "Money transfer",
         date: formattedDate,
-        amount: `+$${transferAmount.toLocaleString()}`
+        amount: `+$${transferAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
       }
       
       setNewActivity(activity)
@@ -128,9 +197,9 @@ function BucketDetailsContent() {
 
     // Start synchronized animation
     setTimeout(() => {
-      animateTogether(0, bucketData.currentAmount, finalProgress, 1500)
+      animateTogether(0, displayCurrentAmount, finalProgress, 1500)
     }, 600)
-  }, [bucketData.currentAmount, finalProgress])
+  }, [displayCurrentAmount, finalProgress])
 
   return (
     <div 
@@ -148,7 +217,15 @@ function BucketDetailsContent() {
           <Button 
             variant="secondary-icon" 
             icon={<ArrowLeft />} 
-            onClick={() => router.back()}
+            onClick={() => {
+              // If coming from a transfer (fromTransfer param), go to home instead of back
+              const fromTransfer = searchParams.get('fromTransfer')
+              if (fromTransfer === 'true') {
+                router.push('/home')
+              } else {
+                router.back()
+              }
+            }}
             className="!bg-black/10 !text-black"
           />
           <div className="flex items-center gap-3">
@@ -161,13 +238,15 @@ function BucketDetailsContent() {
                 />
               }
             >
-              <DropdownMenuItem onClick={() => {
-                const params = new URLSearchParams(searchParams.toString())
-                router.push(`/edit-bucket?${params.toString()}`)
-              }}>
-                <Edit className="h-4 w-4" />
-                Edit bucket
-              </DropdownMenuItem>
+              {bucketData.id !== 'main-bucket' && (
+                <DropdownMenuItem onClick={() => {
+                  const params = new URLSearchParams(searchParams.toString())
+                  router.push(`/edit-bucket?${params.toString()}`)
+                }}>
+                  <Edit className="h-4 w-4" />
+                  Edit bucket
+                </DropdownMenuItem>
+              )}
               <DropdownMenuItem>
                 <ArrowUpFromLine className="h-4 w-4" />
                 Withdraw money
@@ -176,10 +255,12 @@ function BucketDetailsContent() {
                 <Repeat className="h-4 w-4" />
                 Auto deposit
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={handleDeleteBucket}>
-                <Trash2 className="h-4 w-4" />
-                Delete bucket
-              </DropdownMenuItem>
+              {bucketData.id !== 'main-bucket' && (
+                <DropdownMenuItem onClick={handleDeleteBucket}>
+                  <Trash2 className="h-4 w-4" />
+                  Delete bucket
+                </DropdownMenuItem>
+              )}
             </DropdownMenu>
             <Button 
               variant="primary" 
@@ -188,7 +269,7 @@ function BucketDetailsContent() {
               className="!bg-black !text-white"
               onClick={() => router.push('/add-money')}
             >
-              Add money
+              {bucketData.id === 'main-bucket' ? 'Add funds' : 'Add money'}
             </Button>
           </div>
         </div>
@@ -210,30 +291,34 @@ function BucketDetailsContent() {
                 className="text-[32px] font-semibold text-black"
                 style={{ letterSpacing: '-0.05em' }}
               >
-                ${animatedCurrentAmount.toLocaleString()}
+                ${animatedCurrentAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </span>
-              <span 
-                className="text-[32px] font-semibold text-black/40"
-                style={{ letterSpacing: '-0.05em' }}
-              >
-                of ${bucketData.targetAmount.toLocaleString()}
-              </span>
+              {bucketData.id !== 'main-bucket' && (
+                <span 
+                  className="text-[32px] font-semibold text-black/40"
+                  style={{ letterSpacing: '-0.05em' }}
+                >
+                  of ${bucketData.targetAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </span>
+              )}
             </div>
           </div>
         </div>
 
-        {/* Progress bar */}
-        <div 
-          className="mb-10"
-          style={{ animation: 'fadeInUp 0.5s ease-out 0.3s both' }}
-        >
-          <Progress 
-            value={animatedProgress} 
-            max={100} 
-            backgroundColor={bucketData.backgroundColor}
-            className="w-full" 
-          />
-        </div>
+        {/* Progress bar - only for savings buckets, not main bucket */}
+        {bucketData.id !== 'main-bucket' && (
+          <div 
+            className="mb-10"
+            style={{ animation: 'fadeInUp 0.5s ease-out 0.3s both' }}
+          >
+            <Progress 
+              value={animatedProgress} 
+              max={100} 
+              backgroundColor={bucketData.backgroundColor}
+              className="w-full" 
+            />
+          </div>
+        )}
 
 
         {/* Activity list */}
@@ -252,18 +337,35 @@ function BucketDetailsContent() {
           )}
           
           {/* Existing activities */}
-          {bucketData.activities.map((activity, index) => (
+          {loadingActivities ? (
+            <div className="flex justify-center py-8">
+              <p className="text-black/50">Loading activities...</p>
+            </div>
+          ) : activities.length === 0 ? (
+            <div className="flex justify-center py-8">
+              <p className="text-black/50">No activities yet. This bucket was just created!</p>
+            </div>
+          ) : (
+            activities.map((activity, index) => (
             <div 
               key={activity.id}
               style={{ animation: `fadeInUp 0.4s ease-out ${newActivity ? 0.5 + index * 0.05 : 0.5 + index * 0.05}s both` }}
             >
               <ActivityListItem
-                title={activity.title}
-                date={activity.date}
-                amount={activity.amount}
+                title={transformActivityTitle(activity)}
+                date={new Date(activity.date).toLocaleDateString('en-US', { 
+                  month: 'short', 
+                  day: 'numeric', 
+                  year: 'numeric' 
+                })}
+                amount={shouldShowAmount(activity) ? 
+                  (activity.amount >= 0 ? `+$${Math.abs(activity.amount)}` : `-$${Math.abs(activity.amount)}`) 
+                  : undefined
+                }
               />
             </div>
-          ))}
+            ))
+          )}
         </div>
       </div>
     </div>

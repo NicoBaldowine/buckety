@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils"
 export interface ActivityListItemProps extends React.HTMLAttributes<HTMLDivElement> {
   title: string
   date: string
-  amount: string
+  amount?: string
 }
 
 const ActivityListItem = React.forwardRef<HTMLDivElement, ActivityListItemProps>(
@@ -26,9 +26,11 @@ const ActivityListItem = React.forwardRef<HTMLDivElement, ActivityListItemProps>
             {date}
           </p>
         </div>
-        <div className="text-[16px] font-semibold text-black" style={{ letterSpacing: '-0.03em' }}>
-          {amount}
-        </div>
+        {amount && (
+          <div className="text-[16px] font-semibold text-black" style={{ letterSpacing: '-0.03em' }}>
+            {amount}
+          </div>
+        )}
       </div>
     )
   }
