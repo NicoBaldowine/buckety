@@ -11,7 +11,8 @@ CREATE TYPE activity_type AS ENUM (
   'money_removed', 
   'withdrawal',
   'apy_earnings',
-  'auto_deposit'
+  'auto_deposit',
+  'auto_deposit_started'
 );
 
 -- 1. Buckets table - stores user savings buckets
@@ -50,12 +51,32 @@ CREATE TABLE main_bucket (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- 4. Auto deposits table - stores recurring deposit rules
+CREATE TABLE auto_deposits (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+  bucket_id UUID REFERENCES buckets(id) ON DELETE CASCADE NOT NULL,
+  amount DECIMAL(10,2) NOT NULL CHECK (amount > 0),
+  repeat_type TEXT NOT NULL CHECK (repeat_type IN ('daily', 'weekly', 'biweekly', 'monthly', 'custom')),
+  repeat_every_days INTEGER CHECK (repeat_every_days IS NULL OR repeat_every_days >= 2),
+  end_type TEXT NOT NULL CHECK (end_type IN ('bucket_completed', 'specific_date')),
+  end_date DATE,
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'paused', 'completed', 'cancelled')),
+  next_execution_date DATE NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
 -- Create indexes for better performance
 CREATE INDEX idx_buckets_user_id ON buckets(user_id);
 CREATE INDEX idx_buckets_created_at ON buckets(created_at);
 CREATE INDEX idx_activities_bucket_id ON activities(bucket_id);
 CREATE INDEX idx_activities_created_at ON activities(created_at);
 CREATE INDEX idx_main_bucket_user_id ON main_bucket(user_id);
+CREATE INDEX idx_auto_deposits_user_id ON auto_deposits(user_id);
+CREATE INDEX idx_auto_deposits_bucket_id ON auto_deposits(bucket_id);
+CREATE INDEX idx_auto_deposits_status ON auto_deposits(status);
+CREATE INDEX idx_auto_deposits_next_execution ON auto_deposits(next_execution_date);
 
 -- Enable Row Level Security (RLS)
 ALTER TABLE buckets ENABLE ROW LEVEL SECURITY;

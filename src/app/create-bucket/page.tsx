@@ -3,13 +3,24 @@
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { ProtectedRoute } from "@/components/auth/protected-route"
 import { ArrowLeft } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useState } from "react"
 import { HybridStorage } from "@/lib/hybrid-storage"
+import { useAuth } from "@/contexts/auth-context"
 
 export default function CreateBucketPage() {
+  return (
+    <ProtectedRoute>
+      <CreateBucketContent />
+    </ProtectedRoute>
+  )
+}
+
+function CreateBucketContent() {
   const router = useRouter()
+  const { user } = useAuth()
   const [bucketName, setBucketName] = useState("")
   const [targetAmount, setTargetAmount] = useState("")
   const [selectedColor, setSelectedColor] = useState("#B6F3AD")
@@ -76,21 +87,87 @@ export default function CreateBucketPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
-    // Create bucket using hybrid storage (localStorage + database + activity logging)
-    const bucketId = await HybridStorage.createBucket({
-      title: bucketName,
-      targetAmount: parseFloat(targetAmount.replace(/,/g, '')) || 0,
-      backgroundColor: selectedColor,
-      apy: 3.5 // Default APY for new buckets
+    console.log('🚀 Starting bucket creation...', {
+      bucketName,
+      targetAmount,
+      selectedColor,
+      user: user?.id,
+      parsedAmount: parseFloat(targetAmount.replace(/,/g, ''))
     })
     
-    if (bucketId) {
-      console.log('✅ Bucket created successfully:', bucketName)
-      // Navigate to home to see the new bucket
-      router.push('/home')
-    } else {
-      console.error('❌ Failed to create bucket')
-      // Could show an error toast here
+    // Handle demo mode
+    const isDemoMode = localStorage.getItem('demo_mode') === 'true'
+    const effectiveUser = user || (isDemoMode ? JSON.parse(localStorage.getItem('demo_user') || '{}') : null)
+    
+    if (!effectiveUser?.id) {
+      console.error('❌ User not authenticated')
+      alert('Please log in to create a bucket.')
+      return
+    }
+    
+    console.log('👤 Using user:', effectiveUser.id, 'Demo mode:', isDemoMode)
+    
+    if (!bucketName.trim()) {
+      console.error('❌ Bucket name is empty')
+      alert('Please enter a bucket name.')
+      return
+    }
+    
+    const parsedAmount = parseFloat(targetAmount.replace(/,/g, ''))
+    if (!parsedAmount || parsedAmount <= 0) {
+      console.error('❌ Invalid target amount:', parsedAmount)
+      alert('Please enter a valid target amount.')
+      return
+    }
+    
+    try {
+      // Create bucket using hybrid storage (localStorage + database + activity logging)
+      console.log('📝 Creating bucket with data:', {
+        title: bucketName,
+        targetAmount: parsedAmount,
+        backgroundColor: selectedColor,
+        apy: 3.5,
+        userId: effectiveUser.id
+      })
+      
+      // For demo mode, create bucket in localStorage only
+      if (isDemoMode) {
+        const buckets = HybridStorage.getLocalBuckets(effectiveUser.id)
+        const newBucket = {
+          id: `bucket-${Date.now()}`,
+          title: bucketName,
+          currentAmount: 0,
+          targetAmount: parsedAmount,
+          backgroundColor: selectedColor,
+          apy: 3.5,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        }
+        buckets.push(newBucket)
+        localStorage.setItem(`buckets_${effectiveUser.id}`, JSON.stringify(buckets))
+        
+        console.log('✅ Bucket created successfully in demo mode:', bucketName)
+        router.push('/home')
+      } else {
+        const bucketId = await HybridStorage.createBucket({
+          title: bucketName,
+          targetAmount: parsedAmount,
+          backgroundColor: selectedColor,
+          apy: 3.5 // Default APY for new buckets
+        }, effectiveUser.id)
+        
+        if (bucketId) {
+          console.log('✅ Bucket created successfully:', bucketName, 'with ID:', bucketId)
+          // Navigate to home to see the new bucket
+          router.push('/home')
+        } else {
+          console.error('❌ Failed to create bucket - no ID returned')
+          alert('Failed to create bucket. Please try again.')
+        }
+      }
+    } catch (error) {
+      console.error('❌ Error creating bucket:', error)
+      alert('An error occurred while creating the bucket. Please try again.')
     }
   }
 
@@ -191,6 +268,7 @@ export default function CreateBucketPage() {
               type="submit" 
               variant="primary" 
               disabled={!bucketName || !targetAmount}
+              onClick={() => console.log('🔘 Create bucket button clicked!', { bucketName, targetAmount })}
             >
               Create bucket
             </Button>

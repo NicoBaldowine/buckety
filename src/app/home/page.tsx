@@ -3,10 +3,13 @@
 import { Button } from "@/components/ui/button"
 import { BucketCard } from "@/components/ui/bucket-card"
 import { AvatarDropdown } from "@/components/ui/avatar-dropdown"
+import { ProtectedRoute } from "@/components/auth/protected-route"
+import { HeaderSkeleton, BalanceSkeleton, MainBucketSkeleton, BucketCardSkeleton } from "@/components/ui/skeleton-loader"
 import { Info } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useState, useEffect, useRef } from "react"
-import { HybridStorage } from "@/lib/hybrid-storage"
+import { autoDepositService, bucketService, mainBucketService } from "@/lib/supabase"
+import { useAuth } from "@/contexts/auth-context"
 
 const defaultBuckets = [
   {
@@ -60,45 +63,157 @@ const defaultBuckets = [
 ]
 
 export default function HomePage() {
+  return (
+    <ProtectedRoute>
+      <HomePageContent />
+    </ProtectedRoute>
+  )
+}
+
+function HomePageContent() {
   const router = useRouter()
+  const searchParams = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '')
+  const isDemo = searchParams.get('demo') === 'true'
+  const { user, loading: authLoading } = useAuth()
   const [showStickyHeader, setShowStickyHeader] = useState(false)
   const headerRef = useRef<HTMLDivElement>(null)
   const [buckets, setBuckets] = useState<typeof defaultBuckets>([])
   const [totalBalance, setTotalBalance] = useState(0)
   const [mainBucketAmount, setMainBucketAmount] = useState(1200.00)
+  const [autoDepositBuckets, setAutoDepositBuckets] = useState<Set<string>>(new Set())
+  const [isLoading, setIsLoading] = useState(true)
+  const [hasLoadedFromCache, setHasLoadedFromCache] = useState(false)
 
   // Remove complex theme management - using CSS classes instead
 
-  // Initialize from database on mount (hybrid approach)
+  // Load from localStorage immediately for fast initial render
   useEffect(() => {
-    const initializeData = async () => {
-      // Load data from database to localStorage
-      await HybridStorage.initializeFromDatabase()
-      
-      // Load buckets from localStorage (now synced with database)
-      const localBuckets = HybridStorage.getLocalBuckets()
-      if (localBuckets.length > 0) {
-        setBuckets(localBuckets)
-      } else {
-        // First time user - set default buckets (keep for now)
-        setBuckets(defaultBuckets)
-        localStorage.setItem('buckets', JSON.stringify(defaultBuckets))
-      }
-
-      // Load main bucket amount from hybrid storage
-      const mainBucket = HybridStorage.getLocalMainBucket()
-      setMainBucketAmount(mainBucket.currentAmount)
+    // Check for demo mode
+    const demoMode = localStorage.getItem('demo_mode') === 'true'
+    const demoUser = demoMode ? JSON.parse(localStorage.getItem('demo_user') || '{}') : null
+    const effectiveUser = user || demoUser
+    
+    if (!demoMode && authLoading) {
+      // Still waiting for auth to resolve
+      return
     }
     
-    initializeData()
-  }, [])
-
-  // Save buckets to localStorage whenever buckets change
-  useEffect(() => {
-    if (buckets.length > 0) {
-      localStorage.setItem('buckets', JSON.stringify(buckets))
+    if (!effectiveUser) {
+      setIsLoading(false)
+      return
     }
-  }, [buckets])
+    
+    // Load cached data immediately for fast initial render
+    const cachedBuckets = localStorage.getItem(`buckets_${effectiveUser.id}`)
+    const cachedMainBucket = localStorage.getItem(`mainBucket_${effectiveUser.id}`)
+    
+    if (cachedBuckets) {
+      try {
+        setBuckets(JSON.parse(cachedBuckets))
+      } catch (e) {
+        console.warn('Error parsing cached buckets')
+      }
+    }
+    if (cachedMainBucket) {
+      try {
+        setMainBucketAmount(JSON.parse(cachedMainBucket).currentAmount)
+      } catch (e) {
+        console.warn('Error parsing cached main bucket')
+      }
+    }
+    
+    // Show cached data immediately
+    if (cachedBuckets || cachedMainBucket) {
+      setIsLoading(false)
+    }
+    
+    const initializeData = async () => {
+      
+      try {
+        // Load user's buckets directly from database
+        const userBuckets = await bucketService.getBuckets(user.id)
+        
+        if (userBuckets.length > 0) {
+          // Transform database buckets to local format
+          const transformedBuckets = userBuckets.map(bucket => ({
+            id: bucket.id,
+            title: bucket.title,
+            currentAmount: bucket.current_amount,
+            targetAmount: bucket.target_amount,
+            backgroundColor: bucket.background_color,
+            apy: bucket.apy
+          }))
+          
+          setBuckets(transformedBuckets)
+          
+          // Check for auto deposits for each bucket
+          const autoDepositChecks = await Promise.all(
+            userBuckets.map(async (bucket) => {
+              const autoDeposits = await autoDepositService.getBucketAutoDeposits(bucket.id)
+              return { bucketId: bucket.id, hasAutoDeposit: autoDeposits.length > 0 }
+            })
+          )
+          
+          const bucketsWithAutoDeposits = new Set(
+            autoDepositChecks
+              .filter(check => check.hasAutoDeposit)
+              .map(check => check.bucketId)
+          )
+          setAutoDepositBuckets(bucketsWithAutoDeposits)
+          
+          // Save to localStorage for quick access (user-specific)
+          localStorage.setItem(`buckets_${user.id}`, JSON.stringify(transformedBuckets))
+        } else {
+          // New user - start with empty buckets
+          setBuckets([])
+          localStorage.removeItem(`buckets_${user.id}`)
+        }
+
+        // Load user's main bucket
+        const mainBucket = await mainBucketService.getMainBucket(user.id)
+        if (mainBucket) {
+          setMainBucketAmount(mainBucket.current_amount)
+          localStorage.setItem(`mainBucket_${user.id}`, JSON.stringify({ currentAmount: mainBucket.current_amount }))
+        } else {
+          // Create initial main bucket for new user
+          await mainBucketService.updateMainBucket(user.id, 1200.00)
+          setMainBucketAmount(1200.00)
+          localStorage.setItem(`mainBucket_${user.id}`, JSON.stringify({ currentAmount: 1200.00 }))
+        }
+        
+      } catch (error) {
+        console.error('Error loading user data:', error)
+        // Fallback to localStorage if database fails
+        const cachedBuckets = localStorage.getItem(`buckets_${user.id}`)
+        const cachedMainBucket = localStorage.getItem(`mainBucket_${user.id}`)
+        
+        if (cachedBuckets) {
+          setBuckets(JSON.parse(cachedBuckets))
+        }
+        if (cachedMainBucket) {
+          setMainBucketAmount(JSON.parse(cachedMainBucket).currentAmount)
+        }
+      } finally {
+        setIsLoading(false)
+      }
+    }
+    
+    // Set a maximum loading time of 3 seconds
+    const loadingTimeout = setTimeout(() => {
+      setIsLoading(false)
+    }, 3000)
+    
+    initializeData().finally(() => {
+      clearTimeout(loadingTimeout)
+    })
+  }, [user, authLoading])
+
+  // Save buckets to localStorage whenever buckets change (user-specific)
+  useEffect(() => {
+    if (user && buckets.length > 0) {
+      localStorage.setItem(`buckets_${user.id}`, JSON.stringify(buckets))
+    }
+  }, [buckets, user])
 
   // Calculate total balance whenever buckets change
   useEffect(() => {
@@ -107,25 +222,93 @@ export default function HomePage() {
     setTotalBalance(total)
   }, [buckets, mainBucketAmount])
 
-  // Refresh buckets when returning from other pages (to catch new buckets created via HybridStorage)
+  // Refresh buckets when returning from other pages (user-specific)
   useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        // Refresh from localStorage when page becomes visible
-        const localBuckets = HybridStorage.getLocalBuckets()
-        if (localBuckets.length > 0) {
-          setBuckets(localBuckets)
+    const handleVisibilityChange = async () => {
+      if (document.visibilityState === 'visible' && user) {
+        try {
+          // Refresh from localStorage first for immediate update
+          const cachedBuckets = localStorage.getItem(`buckets_${user.id}`)
+          if (cachedBuckets) {
+            try {
+              setBuckets(JSON.parse(cachedBuckets))
+            } catch (e) {
+              console.warn('Error parsing cached buckets during refresh')
+            }
+          }
+          
+          // Refresh from database when page becomes visible
+          const userBuckets = await bucketService.getBuckets(user.id)
+          
+          if (userBuckets.length > 0) {
+            const transformedBuckets = userBuckets.map(bucket => ({
+              id: bucket.id,
+              title: bucket.title,
+              currentAmount: bucket.current_amount,
+              targetAmount: bucket.target_amount,
+              backgroundColor: bucket.background_color,
+              apy: bucket.apy
+            }))
+            
+            setBuckets(transformedBuckets)
+            
+            // Also refresh auto deposit status
+            const autoDepositChecks = await Promise.all(
+              userBuckets.map(async (bucket) => {
+                const autoDeposits = await autoDepositService.getBucketAutoDeposits(bucket.id)
+                return { bucketId: bucket.id, hasAutoDeposit: autoDeposits.length > 0 }
+              })
+            )
+            
+            const bucketsWithAutoDeposits = new Set(
+              autoDepositChecks
+                .filter(check => check.hasAutoDeposit)
+                .map(check => check.bucketId)
+            )
+            setAutoDepositBuckets(bucketsWithAutoDeposits)
+          }
+          
+          // Also refresh main bucket amount
+          const mainBucket = await mainBucketService.getMainBucket(user.id)
+          if (mainBucket) {
+            setMainBucketAmount(mainBucket.current_amount)
+          }
+        } catch (error) {
+          console.error('Error refreshing user data:', error)
         }
-        
-        // Also refresh main bucket amount
-        const mainBucket = HybridStorage.getLocalMainBucket()
-        setMainBucketAmount(mainBucket.currentAmount)
       }
     }
     
     document.addEventListener('visibilitychange', handleVisibilityChange)
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
-  }, [])
+  }, [user])
+
+  // Listen for localStorage changes (e.g., when buckets are deleted)
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (user && e.key === `buckets_${user.id}`) {
+        try {
+          const updatedBuckets = e.newValue ? JSON.parse(e.newValue) : []
+          setBuckets(updatedBuckets)
+          console.log('Buckets updated from storage event:', updatedBuckets.length)
+        } catch (error) {
+          console.warn('Error parsing updated buckets from storage event')
+        }
+      }
+      if (user && e.key === `mainBucket_${user.id}`) {
+        try {
+          const updatedMainBucket = e.newValue ? JSON.parse(e.newValue) : { currentAmount: 0 }
+          setMainBucketAmount(updatedMainBucket.currentAmount)
+          console.log('Main bucket updated from storage event:', updatedMainBucket.currentAmount)
+        } catch (error) {
+          console.warn('Error parsing updated main bucket from storage event')
+        }
+      }
+    }
+
+    window.addEventListener('storage', handleStorageChange)
+    return () => window.removeEventListener('storage', handleStorageChange)
+  }, [user])
 
   const handleBucketClick = (bucket: typeof buckets[0]) => {
     const params = new URLSearchParams({
@@ -152,6 +335,24 @@ export default function HomePage() {
   }, [])
 
 
+  // Show skeleton loading while auth is loading or data is loading
+  if (authLoading || (isLoading && !user)) {
+    return (
+      <div className="min-h-screen bg-background transition-all duration-500 ease-out">
+        <div className="max-w-[660px] mx-auto px-12 py-6">
+          <HeaderSkeleton />
+          <BalanceSkeleton />
+          <MainBucketSkeleton />
+          <div className="space-y-4">
+            <BucketCardSkeleton />
+            <BucketCardSkeleton />
+            <BucketCardSkeleton />
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-background transition-all duration-500 ease-out">
       {/* Sticky Header */}
@@ -170,7 +371,7 @@ export default function HomePage() {
                 Move money
               </Button>
             </div>
-            <AvatarDropdown initial="N" />
+            <AvatarDropdown initial={user?.name?.charAt(0) || user?.email?.charAt(0) || "U"} />
           </div>
         </div>
       </div>
@@ -186,7 +387,7 @@ export default function HomePage() {
               Move money
             </Button>
           </div>
-          <AvatarDropdown initial="N" />
+          <AvatarDropdown initial={user?.name?.charAt(0) || user?.email?.charAt(0) || "U"} />
         </div>
 
         {/* Balance section */}
@@ -266,12 +467,13 @@ export default function HomePage() {
             {/* Add balance button */}
             <div className="ml-4">
               <Button 
-                variant="secondary" 
+                variant="outline"
+                size="sm"
                 onClick={(e) => {
                   e.stopPropagation()
                   // Handle add balance action
                 }}
-                className="main-bucket-button"
+                className="text-[14px] h-[36px] px-4"
               >
                 Add funds
               </Button>
@@ -295,6 +497,7 @@ export default function HomePage() {
                 currentAmount={bucket.currentAmount}
                 targetAmount={bucket.targetAmount}
                 backgroundColor={bucket.backgroundColor}
+                hasAutoDeposit={autoDepositBuckets.has(bucket.id)}
               />
             </div>
           ))}

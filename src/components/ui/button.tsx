@@ -10,6 +10,7 @@ const buttonVariants = cva(
         primary: "bg-primary text-primary-foreground hover:bg-primary/90",
         secondary: "bg-secondary text-secondary-foreground hover:bg-secondary/80",
         "secondary-icon": "bg-secondary text-secondary-foreground hover:bg-secondary/80",
+        outline: "border-2 border-foreground/40 bg-transparent text-foreground hover:bg-foreground/10 hover:border-foreground/60",
         avatar: "bg-secondary text-secondary-foreground hover:bg-secondary/80 rounded-full",
       },
       size: {

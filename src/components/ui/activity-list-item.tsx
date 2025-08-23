@@ -22,7 +22,7 @@ const ActivityListItem = React.forwardRef<HTMLDivElement, ActivityListItemProps>
           <h4 className="text-[16px] font-semibold text-black" style={{ letterSpacing: '-0.03em' }}>
             {title}
           </h4>
-          <p className="text-[14px] font-medium text-black/50 mt-1" style={{ letterSpacing: '-0.03em' }}>
+          <p className="text-[14px] font-medium text-black/50 mt-0.5" style={{ letterSpacing: '-0.03em' }}>
             {date}
           </p>
         </div>

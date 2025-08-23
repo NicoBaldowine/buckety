@@ -4,17 +4,22 @@ import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
 import { ActivityListItem } from "@/components/ui/activity-list-item"
 import { DropdownMenu, DropdownMenuItem } from "@/components/ui/dropdown-menu"
-import { ArrowLeft, MoreVertical, Edit, Trash2, Plus, ArrowUpFromLine, Repeat } from "lucide-react"
+import { ActivityListSkeleton } from "@/components/ui/skeleton-loader"
+import { ConfirmationModal } from "@/components/ui/modal"
+import { ArrowLeft, MoreVertical, Edit, Trash2, Plus, ArrowUpFromLine, Repeat, Download } from "lucide-react"
+import ConfettiExplosion from 'react-confetti-explosion'
 import { useRouter, useSearchParams } from "next/navigation"
 import { Suspense, useState, useEffect } from "react"
 import { HybridStorage } from "@/lib/hybrid-storage"
-import { type Activity } from "@/lib/supabase"
+import { type Activity, type AutoDeposit, autoDepositService } from "@/lib/supabase"
+import { AutoDepositBanner } from "@/components/ui/auto-deposit-banner"
+import { useAuth } from "@/contexts/auth-context"
 
 // Determine if activity should show an amount
 function shouldShowAmount(activity: Activity): boolean {
   // Non-monetary activities that shouldn't show amounts
-  const nonMonetaryActivityTypes = ['bucket_created']
-  const nonMonetaryTitles = ['Bucket created', 'Account opened', 'Settings updated']
+  const nonMonetaryActivityTypes = ['bucket_created', 'auto_deposit_started']
+  const nonMonetaryTitles = ['Bucket created', 'Account opened', 'Settings updated', 'Auto deposit setup']
   
   return !nonMonetaryActivityTypes.includes(activity.activity_type) && 
          !nonMonetaryTitles.includes(activity.title) &&
@@ -28,8 +33,16 @@ function transformActivityTitle(activity: Activity): string {
     return activity.title
   }
   
+  // Check activity type first for auto deposits
+  if (activity.activity_type === 'auto_deposit') {
+    return 'Auto deposited'
+  }
+  
   // Transform based on activity type and available data
   switch (activity.title) {
+    case 'Auto-deposit':
+      return 'Auto deposited'
+    
     case 'Money transfer':
     case 'Received from Main Bucket':
       if (activity.from_source) {
@@ -62,26 +75,140 @@ function transformActivityTitle(activity: Activity): string {
 function BucketDetailsContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const [newActivity, setNewActivity] = useState<any>(null)
+  const { user } = useAuth()
+  const [newActivity, setNewActivity] = useState<{ id: number; title: string; date: string; amount: string } | null>(null)
   const [activities, setActivities] = useState<Activity[]>([])
   const [loadingActivities, setLoadingActivities] = useState(true)
   const [actualCurrentAmount, setActualCurrentAmount] = useState<number | null>(null)
+  const [autoDeposits, setAutoDeposits] = useState<AutoDeposit[]>([])
+  const [loadingAutoDeposits, setLoadingAutoDeposits] = useState(true)
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [showConfetti, setShowConfetti] = useState(false)
+  const [bucketJustCompleted, setBucketJustCompleted] = useState(false)
 
-  const handleDeleteBucket = () => {
+  const handleDeleteBucket = async () => {
     const bucketId = searchParams.get('id')
-    if (bucketId) {
-      // Get current buckets from localStorage
-      const savedBuckets = localStorage.getItem('buckets')
-      if (savedBuckets) {
-        const buckets = JSON.parse(savedBuckets)
-        // Filter out the bucket to delete
-        const updatedBuckets = buckets.filter((bucket: any) => bucket.id !== bucketId)
-        // Save back to localStorage
-        localStorage.setItem('buckets', JSON.stringify(updatedBuckets))
-      }
+    
+    // Handle demo mode
+    const isDemoMode = localStorage.getItem('demo_mode') === 'true'
+    const effectiveUser = user || (isDemoMode ? JSON.parse(localStorage.getItem('demo_user') || '{}') : null)
+    
+    if (!bucketId || !effectiveUser?.id) {
+      console.error('Missing required data for deletion')
+      setIsDeleting(false)
+      setShowDeleteModal(false)
+      return
     }
-    // Navigate back to home
-    router.push('/home')
+    
+    setIsDeleting(true)
+    
+    // Set a safety timeout to prevent infinite processing
+    const timeoutId = setTimeout(() => {
+      console.error('Deletion timeout - forcing completion')
+      setIsDeleting(false)
+      setShowDeleteModal(false)
+      window.location.href = '/home'
+    }, 10000) // 10 second timeout
+    
+    try {
+      console.log('Starting bucket deletion process for:', bucketId)
+      
+      // Get current bucket amount to transfer to main bucket
+      const buckets = HybridStorage.getLocalBuckets(effectiveUser.id)
+      const bucketToDelete = buckets.find((b: { id: string }) => b.id === bucketId)
+      
+      console.log('Found bucket to delete:', bucketToDelete)
+      
+      if (bucketToDelete && bucketToDelete.currentAmount > 0) {
+        console.log('Transferring funds to main bucket:', bucketToDelete.currentAmount)
+        
+        try {
+          // Transfer funds to main bucket
+          const transferResult = await HybridStorage.transferMoney(
+            bucketId,
+            'main-bucket',
+            bucketToDelete.currentAmount,
+            effectiveUser.id
+          )
+          
+          if (!transferResult.success) {
+            console.error('Failed to transfer funds to main bucket:', transferResult.error)
+          } else {
+            console.log('Funds transferred successfully')
+          }
+        } catch (transferError) {
+          console.error('Error during fund transfer:', transferError)
+          // Continue with deletion even if transfer fails
+        }
+      }
+      
+      // Delete bucket from localStorage
+      const bucketsKey = `buckets_${effectiveUser.id}`
+      const savedBuckets = localStorage.getItem(bucketsKey)
+      if (savedBuckets) {
+        try {
+          const allBuckets = JSON.parse(savedBuckets)
+          const updatedBuckets = allBuckets.filter((bucket: { id: string }) => bucket.id !== bucketId)
+          localStorage.setItem(bucketsKey, JSON.stringify(updatedBuckets))
+          console.log('Bucket deleted from localStorage, remaining buckets:', updatedBuckets.length)
+        } catch (localStorageError) {
+          console.error('Error updating localStorage:', localStorageError)
+        }
+      }
+      
+      // Delete from database if not in demo mode
+      if (!isDemoMode && user?.id) {
+        try {
+          console.log('Deleting from database...')
+          // Import services for comprehensive deletion
+          const { bucketService, autoDepositService } = await import('@/lib/supabase')
+          
+          // First, cancel any active auto deposits for this bucket
+          const bucketAutoDeposits = await autoDepositService.getBucketAutoDeposits(bucketId)
+          for (const autoDeposit of bucketAutoDeposits) {
+            await autoDepositService.updateAutoDepositStatus(autoDeposit.id, 'cancelled')
+            console.log('Cancelled auto deposit:', autoDeposit.id)
+          }
+          
+          // Delete the bucket from database
+          const deleteResult = await bucketService.deleteBucket(bucketId)
+          if (deleteResult) {
+            console.log('Bucket deleted from database successfully')
+          } else {
+            console.warn('Database deletion may have failed, but continuing')
+          }
+          
+          // Clear any cached activities for this bucket
+          localStorage.removeItem(`activities_${bucketId}`)
+          
+        } catch (dbError) {
+          console.error('Error deleting bucket from database:', dbError)
+          // Don't fail the operation if database deletion fails
+        }
+      }
+      
+      console.log('Deletion process completed, navigating to home...')
+      
+      // Set a small delay to ensure state updates complete
+      setTimeout(() => {
+        console.log('Redirecting to home page...')
+        window.location.href = '/home'
+      }, 100)
+      
+    } catch (error) {
+      console.error('Critical error during bucket deletion:', error)
+      alert('An error occurred while deleting the bucket. Please try again.')
+    } finally {
+      // Clear the safety timeout
+      clearTimeout(timeoutId)
+      
+      // Ensure modal state is reset even if navigation fails
+      setTimeout(() => {
+        setIsDeleting(false)
+        setShowDeleteModal(false)
+      }, 50)
+    }
   }
   
   // Get bucket data from URL parameters
@@ -98,11 +225,11 @@ function BucketDetailsContent() {
   useEffect(() => {
     const loadActualAmount = () => {
       if (bucketData.id === 'main-bucket') {
-        const mainBucket = HybridStorage.getLocalMainBucket()
+        const mainBucket = HybridStorage.getLocalMainBucket(user?.id)
         setActualCurrentAmount(mainBucket.currentAmount)
       } else {
-        const buckets = HybridStorage.getLocalBuckets()
-        const bucket = buckets.find((b: any) => b.id === bucketData.id)
+        const buckets = HybridStorage.getLocalBuckets(user?.id)
+        const bucket = buckets.find((b: { id: string; currentAmount: number }) => b.id === bucketData.id)
         if (bucket) {
           setActualCurrentAmount(bucket.currentAmount)
         }
@@ -110,15 +237,29 @@ function BucketDetailsContent() {
     }
     
     loadActualAmount()
-  }, [bucketData.id])
+  }, [bucketData.id, user?.id])
 
-  // Load activities from database
+  // Load activities from database with optimized caching
   useEffect(() => {
     const loadActivities = async () => {
-      if (bucketData.id) {
+      if (bucketData.id && user?.id) {
         setLoadingActivities(true)
         try {
-          const bucketActivities = await HybridStorage.getBucketActivities(bucketData.id)
+          // Try to load from cache first for immediate display
+          const cacheKey = `activities_${bucketData.id}`
+          const cachedActivities = localStorage.getItem(cacheKey)
+          if (cachedActivities) {
+            try {
+              const cached = JSON.parse(cachedActivities)
+              setActivities(cached)
+              setLoadingActivities(false) // Show cached data immediately
+            } catch (e) {
+              console.warn('Error parsing cached activities')
+            }
+          }
+          
+          // Load fresh data with user context
+          const bucketActivities = await HybridStorage.getBucketActivities(bucketData.id, user.id)
           setActivities(bucketActivities)
         } catch (error) {
           console.error('Error loading activities:', error)
@@ -130,6 +271,29 @@ function BucketDetailsContent() {
     }
     
     loadActivities()
+  }, [bucketData.id, user?.id])
+
+  // Load auto deposits for this bucket
+  useEffect(() => {
+    const loadAutoDeposits = async () => {
+      if (bucketData.id && bucketData.id !== 'main-bucket') {
+        setLoadingAutoDeposits(true)
+        try {
+          const bucketAutoDeposits = await autoDepositService.getBucketAutoDeposits(bucketData.id)
+          setAutoDeposits(bucketAutoDeposits)
+        } catch (error) {
+          console.warn('Auto deposits not available (database table may not exist):', error)
+          // Gracefully handle missing auto_deposits table
+          setAutoDeposits([])
+        } finally {
+          setLoadingAutoDeposits(false)
+        }
+      } else {
+        setLoadingAutoDeposits(false)
+      }
+    }
+    
+    loadAutoDeposits()
   }, [bucketData.id])
 
   const [animatedCurrentAmount, setAnimatedCurrentAmount] = useState(0)
@@ -139,39 +303,56 @@ function BucketDetailsContent() {
   const displayCurrentAmount = actualCurrentAmount !== null ? actualCurrentAmount : bucketData.currentAmount
   const finalProgress = Math.min((displayCurrentAmount / bucketData.targetAmount) * 100, 100)
 
-  // Check for transfer and add new activity
+  // Check for transfer and bucket completion
   useEffect(() => {
-    const showTransfer = searchParams.get('showTransfer')
+    const fromTransfer = searchParams.get('fromTransfer')
     const transferAmountParam = searchParams.get('transferAmount')
     
-    if (showTransfer === 'true' && transferAmountParam) {
-      const transferAmount = parseFloat(transferAmountParam)
-      const now = new Date()
-      const formattedDate = now.toLocaleDateString('en-US', { 
-        month: 'short', 
-        day: 'numeric', 
-        year: 'numeric' 
-      })
+    if (fromTransfer === 'true') {
+      // Check if bucket just got completed
+      const currentAmount = actualCurrentAmount !== null ? actualCurrentAmount : bucketData.currentAmount
+      const isNowComplete = currentAmount >= bucketData.targetAmount && bucketData.targetAmount > 0
       
-      // Create new activity for the transfer
-      const activity = {
-        id: Date.now(),
-        title: "Money transfer",
-        date: formattedDate,
-        amount: `+$${transferAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+      if (isNowComplete && bucketData.id !== 'main-bucket') {
+        console.log('🎉 Bucket just completed! Showing confetti')
+        setBucketJustCompleted(true)
+        setShowConfetti(true)
+        
+        // Stop confetti after 4 seconds
+        setTimeout(() => {
+          setShowConfetti(false)
+        }, 4000)
       }
       
-      setNewActivity(activity)
+      if (transferAmountParam) {
+        const transferAmount = parseFloat(transferAmountParam)
+        const now = new Date()
+        const formattedDate = now.toLocaleDateString('en-US', { 
+          month: 'short', 
+          day: 'numeric', 
+          year: 'numeric' 
+        })
+        
+        // Create new activity for the transfer
+        const activity = {
+          id: Date.now(),
+          title: "Money transfer",
+          date: formattedDate,
+          amount: `+$${transferAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+        }
+        
+        setNewActivity(activity)
+      }
       
       // Clean up the URL parameters after showing animation
       setTimeout(() => {
         const params = new URLSearchParams(searchParams.toString())
-        params.delete('showTransfer')
+        params.delete('fromTransfer')
         params.delete('transferAmount')
         window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}`)
       }, 100)
     }
-  }, [searchParams])
+  }, [searchParams, actualCurrentAmount, bucketData.currentAmount, bucketData.targetAmount, bucketData.id])
 
   // Animate numbers and progress together
   useEffect(() => {
@@ -201,6 +382,13 @@ function BucketDetailsContent() {
     }, 600)
   }, [displayCurrentAmount, finalProgress])
 
+  const handleManageAutoDeposit = () => {
+    if (autoDeposits.length > 0) {
+      // Navigate to add money page in auto-deposit mode
+      router.push(`/add-money?to=${bucketData.id}&autoDepositId=${autoDeposits[0].id}`)
+    }
+  }
+
   return (
     <div 
       className="min-h-screen"
@@ -218,9 +406,10 @@ function BucketDetailsContent() {
             variant="secondary-icon" 
             icon={<ArrowLeft />} 
             onClick={() => {
-              // If coming from a transfer (fromTransfer param), go to home instead of back
+              // If coming from a transfer or auto deposit setup, go to home instead of back
               const fromTransfer = searchParams.get('fromTransfer')
-              if (fromTransfer === 'true') {
+              const fromAutoDeposit = searchParams.get('fromAutoDeposit')
+              if (fromTransfer === 'true' || fromAutoDeposit === 'true') {
                 router.push('/home')
               } else {
                 router.back()
@@ -251,12 +440,17 @@ function BucketDetailsContent() {
                 <ArrowUpFromLine className="h-4 w-4" />
                 Withdraw money
               </DropdownMenuItem>
-              <DropdownMenuItem>
-                <Repeat className="h-4 w-4" />
-                Auto deposit
-              </DropdownMenuItem>
+              {/* Only show auto deposit option if bucket is not completed */}
+              {!(displayCurrentAmount >= bucketData.targetAmount) && (
+                <DropdownMenuItem onClick={() => {
+                  router.push(`/add-money?to=${bucketData.id}&showAutoDeposit=true`)
+                }}>
+                  <Repeat className="h-4 w-4" />
+                  Auto deposit
+                </DropdownMenuItem>
+              )}
               {bucketData.id !== 'main-bucket' && (
-                <DropdownMenuItem onClick={handleDeleteBucket}>
+                <DropdownMenuItem onClick={() => setShowDeleteModal(true)}>
                   <Trash2 className="h-4 w-4" />
                   Delete bucket
                 </DropdownMenuItem>
@@ -264,27 +458,52 @@ function BucketDetailsContent() {
             </DropdownMenu>
             <Button 
               variant="primary" 
-              icon={<Plus />} 
+              icon={bucketData.id !== 'main-bucket' && displayCurrentAmount >= bucketData.targetAmount ? <Download /> : <Plus />} 
               iconPosition="left"
               className="!bg-black !text-white"
-              onClick={() => router.push('/add-money')}
+              onClick={() => {
+                // If bucket is completed, show withdraw action, otherwise add money
+                if (bucketData.id !== 'main-bucket' && displayCurrentAmount >= bucketData.targetAmount) {
+                  // TODO: Navigate to withdraw page when implemented
+                  alert('Withdraw functionality coming soon!')
+                } else {
+                  router.push(`/add-money?to=${bucketData.id}`)
+                }
+              }}
             >
-              {bucketData.id === 'main-bucket' ? 'Add funds' : 'Add money'}
+              {bucketData.id === 'main-bucket' 
+                ? 'Add funds' 
+                : (displayCurrentAmount >= bucketData.targetAmount ? 'Withdraw' : 'Add money')
+              }
             </Button>
           </div>
         </div>
 
         {/* Bucket title */}
         <div 
-          className="mb-10"
+          className="mb-10 relative"
           style={{ animation: 'fadeInUp 0.5s ease-out 0.2s both' }}
         >
+          {/* Confetti explosion */}
+          {showConfetti && (
+            <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50">
+              <ConfettiExplosion 
+                particleCount={150}
+                width={1200}
+                duration={4000}
+                colors={['#f43f5e', '#ec4899', '#8b5cf6', '#06b6d4', '#10b981', '#f59e0b']}
+              />
+            </div>
+          )}
+          
           <h1 
             className="text-[40px] font-semibold text-black"
             style={{ letterSpacing: '-0.03em' }}
           >
             {bucketData.title}
           </h1>
+          
+          
           <div className="flex items-baseline mt-2">
             <div className="flex items-baseline gap-1">
               <span 
@@ -315,11 +534,20 @@ function BucketDetailsContent() {
               value={animatedProgress} 
               max={100} 
               backgroundColor={bucketData.backgroundColor}
+              isCompleted={displayCurrentAmount >= bucketData.targetAmount}
+              showCompletionBadge={displayCurrentAmount >= bucketData.targetAmount}
               className="w-full" 
             />
           </div>
         )}
 
+        {/* Auto deposit banner - only for savings buckets with auto deposits */}
+        {bucketData.id !== 'main-bucket' && !loadingAutoDeposits && autoDeposits.length > 0 && (
+          <AutoDepositBanner 
+            autoDeposit={autoDeposits[0]} 
+            onManage={handleManageAutoDeposit}
+          />
+        )}
 
         {/* Activity list */}
         <div style={{ animation: 'fadeInUp 0.5s ease-out 0.4s both' }}>
@@ -337,10 +565,8 @@ function BucketDetailsContent() {
           )}
           
           {/* Existing activities */}
-          {loadingActivities ? (
-            <div className="flex justify-center py-8">
-              <p className="text-black/50">Loading activities...</p>
-            </div>
+          {loadingActivities && activities.length === 0 ? (
+            <ActivityListSkeleton count={5} />
           ) : activities.length === 0 ? (
             <div className="flex justify-center py-8">
               <p className="text-black/50">No activities yet. This bucket was just created!</p>
@@ -368,6 +594,23 @@ function BucketDetailsContent() {
           )}
         </div>
       </div>
+      
+      {/* Delete Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={showDeleteModal}
+        onClose={() => setShowDeleteModal(false)}
+        onConfirm={handleDeleteBucket}
+        title="Delete bucket?"
+        description={`Are you sure you want to delete "${bucketData.title}"? ${
+          actualCurrentAmount && actualCurrentAmount > 0
+            ? `Your funds ($${actualCurrentAmount.toFixed(2)}) will be moved to your Main Bucket.`
+            : 'This action cannot be undone.'
+        }`}
+        confirmLabel="Delete bucket"
+        cancelLabel="Keep bucket"
+        variant="danger"
+        loading={isDeleting}
+      />
     </div>
   )
 }

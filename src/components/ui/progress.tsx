@@ -5,10 +5,12 @@ export interface ProgressProps extends React.HTMLAttributes<HTMLDivElement> {
   value?: number
   max?: number
   backgroundColor?: string
+  isCompleted?: boolean
+  showCompletionBadge?: boolean
 }
 
 const Progress = React.forwardRef<HTMLDivElement, ProgressProps>(
-  ({ className, value = 0, max = 100, backgroundColor, ...props }, ref) => {
+  ({ className, value = 0, max = 100, backgroundColor, isCompleted = false, showCompletionBadge = false, ...props }, ref) => {
     const percentage = Math.min(Math.max((value / max) * 100, 0), 100)
     const uniqueId = React.useId()
     
@@ -16,6 +18,7 @@ const Progress = React.forwardRef<HTMLDivElement, ProgressProps>(
       <div
         ref={ref}
         className={cn("relative h-10 w-full", className)}
+        style={{ position: 'relative', zIndex: 1 }}
         {...props}
       >
         <svg
@@ -35,6 +38,18 @@ const Progress = React.forwardRef<HTMLDivElement, ProgressProps>(
               <rect width="8" height="8" fill="transparent" />
               <rect width="1" height="8" fill="#000000" />
             </pattern>
+            
+            {/* Clip path for progress bar to ensure stripes stay within rounded corners */}
+            <clipPath id={`progress-clip-${uniqueId}`}>
+              <rect
+                x="1"
+                y="1"
+                width={`calc(${percentage}% - 2px)`}
+                height="38"
+                rx="12"
+                ry="12"
+              />
+            </clipPath>
           </defs>
           
           {/* Background pill */}
@@ -49,16 +64,16 @@ const Progress = React.forwardRef<HTMLDivElement, ProgressProps>(
             fillOpacity="0.1"
           />
           
-          {/* Progress fill with diagonal stripes */}
-          <rect
-            x="1"
-            y="1"
-            width={`calc(${percentage}% - 2px)`}
-            height="38"
-            rx="12"
-            ry="12"
-            fill={`url(#diagonal-stripes-${uniqueId})`}
-          />
+          {/* Progress fill with diagonal stripes - now properly clipped */}
+          <g clipPath={`url(#progress-clip-${uniqueId})`}>
+            <rect
+              x="1"
+              y="1"
+              width={`calc(${percentage}% - 2px)`}
+              height="38"
+              fill={`url(#diagonal-stripes-${uniqueId})`}
+            />
+          </g>
           
           {/* Divider stroke between filled and remaining areas */}
           {percentage > 0 && percentage < 100 && (
@@ -85,6 +100,21 @@ const Progress = React.forwardRef<HTMLDivElement, ProgressProps>(
             strokeWidth="1"
           />
         </svg>
+        
+        {/* Completion badge - positioned absolutely on top */}
+        {isCompleted && showCompletionBadge && (
+          <div 
+            className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 pointer-events-none"
+            style={{ zIndex: 10 }}
+          >
+            <div className="inline-flex items-center gap-1 px-2 py-1 bg-black/10 text-black rounded-full h-6">
+              <span className="text-xs">🎉</span>
+              <span className="text-[11px] font-semibold" style={{ letterSpacing: '-0.03em' }}>
+                Bucket completed
+              </span>
+            </div>
+          </div>
+        )}
         
       </div>
     )

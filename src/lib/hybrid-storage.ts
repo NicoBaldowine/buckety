@@ -6,11 +6,20 @@ export class HybridStorage {
   private static readonly MAIN_BUCKET_KEY = 'mainBucket'
   private static readonly USER_ID = '00000000-0000-0000-0000-000000000001' // For now, using a fixed test UUID
 
+  // Get user-specific localStorage keys
+  private static getBucketsKey(userId?: string): string {
+    return userId ? `buckets_${userId}` : this.BUCKETS_KEY
+  }
+
+  private static getMainBucketKey(userId?: string): string {
+    return userId ? `mainBucket_${userId}` : this.MAIN_BUCKET_KEY
+  }
+
   // Load initial data from database to localStorage
-  static async initializeFromDatabase(): Promise<void> {
+  static async initializeFromDatabase(userId?: string): Promise<void> {
     try {
       // Load buckets from database
-      const buckets = await bucketService.getBuckets()
+      const buckets = await bucketService.getBuckets(userId)
       const localBuckets = buckets.map(bucket => ({
         id: bucket.id,
         title: bucket.title,
@@ -23,23 +32,26 @@ export class HybridStorage {
       }))
       
       if (localBuckets.length > 0) {
-        localStorage.setItem(this.BUCKETS_KEY, JSON.stringify(localBuckets))
+        localStorage.setItem(this.getBucketsKey(userId), JSON.stringify(localBuckets))
       }
 
       // Load main bucket from database (with fallback for RLS issues)
       try {
-        const mainBucket = await mainBucketService.getMainBucket(this.USER_ID)
+        const mainBucket = await mainBucketService.getMainBucket(userId || this.USER_ID)
         if (mainBucket) {
-          localStorage.setItem(this.MAIN_BUCKET_KEY, JSON.stringify({
+          localStorage.setItem(this.getMainBucketKey(userId), JSON.stringify({
             currentAmount: mainBucket.current_amount
           }))
+        } else {
+          // Database returned null (no auth or RLS issue) - use localStorage fallback
+          const existingMainBucket = this.getLocalMainBucket(userId)
+          console.log('Using localStorage fallback for main bucket:', existingMainBucket.currentAmount)
         }
       } catch (error) {
-        console.warn('Could not load main bucket from database (RLS issue), using default:', error)
-        // Use default main bucket amount
-        localStorage.setItem(this.MAIN_BUCKET_KEY, JSON.stringify({
-          currentAmount: 1200
-        }))
+        console.warn('Could not load main bucket from database, using localStorage fallback:', error)
+        // Keep existing localStorage data
+        const existingMainBucket = this.getLocalMainBucket(userId)
+        console.log('Keeping existing main bucket amount:', existingMainBucket.currentAmount)
       }
 
       console.log('✅ Initialized from database:', { buckets: localBuckets.length })
@@ -54,7 +66,7 @@ export class HybridStorage {
     targetAmount: number
     backgroundColor: string
     apy: number
-  }): Promise<string | null> {
+  }, userId?: string): Promise<string | null> {
     try {
       // 1. Create in database first (to get proper ID and auto-logging)
       const dbBucket = await bucketService.createBucket({
@@ -63,7 +75,7 @@ export class HybridStorage {
         target_amount: bucketData.targetAmount,
         background_color: bucketData.backgroundColor,
         apy: bucketData.apy,
-        user_id: this.USER_ID
+        user_id: userId || this.USER_ID
       })
 
       if (!dbBucket) {
@@ -71,7 +83,7 @@ export class HybridStorage {
       }
 
       // 2. Add to localStorage for immediate UI update
-      const buckets = this.getLocalBuckets()
+      const buckets = this.getLocalBuckets(userId)
       const newLocalBucket = {
         id: dbBucket.id,
         title: dbBucket.title,
@@ -84,7 +96,7 @@ export class HybridStorage {
       }
       
       buckets.push(newLocalBucket)
-      localStorage.setItem(this.BUCKETS_KEY, JSON.stringify(buckets))
+      localStorage.setItem(this.getBucketsKey(userId), JSON.stringify(buckets))
 
       console.log('✅ Created bucket:', dbBucket.title)
       return dbBucket.id
@@ -98,13 +110,14 @@ export class HybridStorage {
   static async transferMoney(
     fromBucketId: string,
     toBucketId: string,
-    amount: number
+    amount: number,
+    userId?: string
   ): Promise<{ success: boolean; error?: string }> {
     try {
       // Handle main bucket transfers
       if (fromBucketId === 'main-bucket' && toBucketId !== 'main-bucket') {
         // Transfer from main bucket to savings bucket
-        const buckets = this.getLocalBuckets()
+        const buckets = this.getLocalBuckets(userId)
         const toBucket = buckets.find(b => b.id === toBucketId)
         
         if (!toBucket) {
@@ -113,19 +126,19 @@ export class HybridStorage {
 
         // Update localStorage immediately
         toBucket.currentAmount += amount
-        localStorage.setItem(this.BUCKETS_KEY, JSON.stringify(buckets))
+        localStorage.setItem(this.getBucketsKey(userId), JSON.stringify(buckets))
 
         // Update main bucket in localStorage too
-        const mainBucket = this.getLocalMainBucket()
+        const mainBucket = this.getLocalMainBucket(userId)
         mainBucket.currentAmount -= amount
-        localStorage.setItem(this.MAIN_BUCKET_KEY, JSON.stringify(mainBucket))
+        localStorage.setItem(this.getMainBucketKey(userId), JSON.stringify(mainBucket))
 
         // Sync to database
-        await transferService.transferToSavingsBucket(toBucketId, toBucket.currentAmount, amount, this.USER_ID)
+        await transferService.transferToSavingsBucket(toBucketId, toBucket.currentAmount, amount, userId || this.USER_ID)
         
       } else if (fromBucketId !== 'main-bucket' && toBucketId === 'main-bucket') {
         // Transfer from savings bucket to main bucket
-        const buckets = this.getLocalBuckets()
+        const buckets = this.getLocalBuckets(userId)
         const fromBucket = buckets.find(b => b.id === fromBucketId)
         
         if (!fromBucket) {
@@ -138,19 +151,19 @@ export class HybridStorage {
 
         // Update localStorage immediately
         fromBucket.currentAmount -= amount
-        localStorage.setItem(this.BUCKETS_KEY, JSON.stringify(buckets))
+        localStorage.setItem(this.getBucketsKey(userId), JSON.stringify(buckets))
 
         // Update main bucket in localStorage too
-        const mainBucket = this.getLocalMainBucket()
+        const mainBucket = this.getLocalMainBucket(userId)
         mainBucket.currentAmount += amount
-        localStorage.setItem(this.MAIN_BUCKET_KEY, JSON.stringify(mainBucket))
+        localStorage.setItem(this.getMainBucketKey(userId), JSON.stringify(mainBucket))
 
         // Sync to database
-        await transferService.transferFromSavingsBucket(fromBucketId, amount, this.USER_ID)
+        await transferService.transferFromSavingsBucket(fromBucketId, amount, userId || this.USER_ID)
         
       } else {
         // Transfer between savings buckets
-        const buckets = this.getLocalBuckets()
+        const buckets = this.getLocalBuckets(userId)
         const fromBucket = buckets.find(b => b.id === fromBucketId)
         const toBucket = buckets.find(b => b.id === toBucketId)
 
@@ -165,7 +178,7 @@ export class HybridStorage {
         // Update localStorage immediately
         fromBucket.currentAmount -= amount
         toBucket.currentAmount += amount
-        localStorage.setItem(this.BUCKETS_KEY, JSON.stringify(buckets))
+        localStorage.setItem(this.getBucketsKey(userId), JSON.stringify(buckets))
 
         // Sync to database
         await bucketService.updateBucket(fromBucketId, { current_amount: fromBucket.currentAmount })
@@ -184,15 +197,52 @@ export class HybridStorage {
     }
   }
 
-  // Get bucket activities from database
-  static async getBucketActivities(bucketId: string): Promise<Activity[]> {
+  // Get bucket activities from database with caching
+  static async getBucketActivities(bucketId: string, userId?: string): Promise<Activity[]> {
     try {
-      if (bucketId === 'main-bucket') {
-        // For main bucket, get all transfer activities where money was sent to other buckets
-        const activities = await activityService.getMainBucketTransferActivities(this.USER_ID)
-        return activities
+      // Try to load from cache first
+      const cacheKey = `activities_${bucketId}`
+      const cachedActivities = localStorage.getItem(cacheKey)
+      
+      // Return cached activities immediately if available
+      let activities: Activity[] = []
+      if (cachedActivities) {
+        try {
+          activities = JSON.parse(cachedActivities)
+        } catch (e) {
+          console.warn('Error parsing cached activities')
+        }
       }
-      return await activityService.getActivities(bucketId)
+      
+      // Load fresh data from database in background
+      const loadFreshData = async () => {
+        try {
+          let freshActivities: Activity[]
+          if (bucketId === 'main-bucket') {
+            // For main bucket, get all transfer activities where money was sent to other buckets
+            freshActivities = await activityService.getMainBucketTransferActivities(userId || this.USER_ID)
+          } else {
+            freshActivities = await activityService.getActivities(bucketId)
+          }
+          
+          // Cache the fresh data
+          localStorage.setItem(cacheKey, JSON.stringify(freshActivities))
+          return freshActivities
+        } catch (error) {
+          console.error('❌ Error loading fresh activities:', error)
+          return activities // Return cached activities if fresh load fails
+        }
+      }
+      
+      // If we have cached data, return it immediately and update in background
+      if (activities.length > 0) {
+        // Update cache in background
+        loadFreshData()
+        return activities
+      } else {
+        // No cached data, wait for fresh data
+        return await loadFreshData()
+      }
     } catch (error) {
       console.error('❌ Error loading activities:', error)
       return []
@@ -200,14 +250,14 @@ export class HybridStorage {
   }
 
   // Get buckets from localStorage (for fast UI updates)
-  static getLocalBuckets(): any[] {
-    const saved = localStorage.getItem(this.BUCKETS_KEY)
+  static getLocalBuckets(userId?: string): { id: string; title: string; currentAmount: number; targetAmount: number; backgroundColor: string; apy: number }[] {
+    const saved = localStorage.getItem(this.getBucketsKey(userId))
     return saved ? JSON.parse(saved) : []
   }
 
   // Get main bucket from localStorage
-  static getLocalMainBucket(): { currentAmount: number } {
-    const saved = localStorage.getItem(this.MAIN_BUCKET_KEY)
+  static getLocalMainBucket(userId?: string): { currentAmount: number } {
+    const saved = localStorage.getItem(this.getMainBucketKey(userId))
     return saved ? JSON.parse(saved) : { currentAmount: 1200 }
   }
 
@@ -217,10 +267,10 @@ export class HybridStorage {
     targetAmount?: number
     backgroundColor?: string
     currentAmount?: number
-  }): Promise<boolean> {
+  }, userId?: string): Promise<boolean> {
     try {
       // 1. Update localStorage immediately
-      const buckets = this.getLocalBuckets()
+      const buckets = this.getLocalBuckets(userId)
       const bucket = buckets.find(b => b.id === bucketId)
       if (bucket) {
         if (updates.title !== undefined) bucket.title = updates.title
@@ -228,11 +278,11 @@ export class HybridStorage {
         if (updates.backgroundColor !== undefined) bucket.backgroundColor = updates.backgroundColor
         if (updates.currentAmount !== undefined) bucket.currentAmount = updates.currentAmount
         
-        localStorage.setItem(this.BUCKETS_KEY, JSON.stringify(buckets))
+        localStorage.setItem(this.getBucketsKey(userId), JSON.stringify(buckets))
       }
 
       // 2. Sync to database
-      const dbUpdates: any = {}
+      const dbUpdates: Record<string, unknown> = {}
       if (updates.title !== undefined) dbUpdates.title = updates.title
       if (updates.targetAmount !== undefined) dbUpdates.target_amount = updates.targetAmount
       if (updates.backgroundColor !== undefined) dbUpdates.background_color = updates.backgroundColor
@@ -247,12 +297,12 @@ export class HybridStorage {
   }
 
   // Delete bucket from both localStorage and database
-  static async deleteBucket(bucketId: string): Promise<boolean> {
+  static async deleteBucket(bucketId: string, userId?: string): Promise<boolean> {
     try {
       // 1. Remove from localStorage immediately
-      const buckets = this.getLocalBuckets()
+      const buckets = this.getLocalBuckets(userId)
       const filteredBuckets = buckets.filter(b => b.id !== bucketId)
-      localStorage.setItem(this.BUCKETS_KEY, JSON.stringify(filteredBuckets))
+      localStorage.setItem(this.getBucketsKey(userId), JSON.stringify(filteredBuckets))
 
       // 2. Delete from database
       const success = await bucketService.deleteBucket(bucketId)

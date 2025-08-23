@@ -3,13 +3,16 @@
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { ProtectedRoute } from "@/components/auth/protected-route"
 import { ArrowLeft } from "lucide-react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useState, useEffect, Suspense } from "react"
 import { HybridStorage } from "@/lib/hybrid-storage"
+import { useAuth } from "@/contexts/auth-context"
 
 function EditBucketContent() {
   const router = useRouter()
+  const { user } = useAuth()
   const searchParams = useSearchParams()
   const [bucketName, setBucketName] = useState("")
   const [targetAmount, setTargetAmount] = useState("")
@@ -89,22 +92,74 @@ function EditBucketContent() {
     e.preventDefault()
     
     const bucketId = searchParams.get('id')
-    if (!bucketId) return
+    if (!bucketId) {
+      console.error('❌ No bucket ID provided')
+      alert('No bucket ID provided.')
+      return
+    }
     
-    // Use hybrid storage to update both localStorage and database
-    const success = await HybridStorage.updateBucket(bucketId, {
-      title: bucketName,
-      targetAmount: parseFloat(targetAmount.replace(/,/g, '')) || 0,
-      backgroundColor: selectedColor
-    })
+    // Handle demo mode
+    const isDemoMode = localStorage.getItem('demo_mode') === 'true'
+    const effectiveUser = user || (isDemoMode ? JSON.parse(localStorage.getItem('demo_user') || '{}') : null)
     
-    if (success) {
-      console.log('✅ Bucket updated successfully:', bucketName)
-      // Navigate back to home
-      router.push('/home')
-    } else {
-      console.error('❌ Failed to update bucket')
-      // Could show an error toast here
+    if (!effectiveUser?.id) {
+      console.error('❌ User not authenticated')
+      alert('Please log in to edit bucket.')
+      return
+    }
+    
+    const parsedAmount = parseFloat(targetAmount.replace(/,/g, ''))
+    if (!parsedAmount || parsedAmount <= 0) {
+      console.error('❌ Invalid target amount:', parsedAmount)
+      alert('Please enter a valid target amount.')
+      return
+    }
+    
+    try {
+      // For demo mode, update bucket in localStorage only
+      if (isDemoMode) {
+        const buckets = HybridStorage.getLocalBuckets(effectiveUser.id)
+        const bucketIndex = buckets.findIndex(b => b.id === bucketId)
+        
+        if (bucketIndex !== -1) {
+          buckets[bucketIndex] = {
+            ...buckets[bucketIndex],
+            title: bucketName,
+            targetAmount: parsedAmount,
+            backgroundColor: selectedColor,
+            updated_at: new Date().toISOString()
+          }
+          localStorage.setItem(`buckets_${effectiveUser.id}`, JSON.stringify(buckets))
+          
+          console.log('✅ Bucket updated successfully in demo mode:', bucketName)
+          
+          // Navigate to home page
+          router.push('/home')
+        } else {
+          console.error('❌ Bucket not found in localStorage')
+          alert('Bucket not found.')
+        }
+      } else {
+        // Use hybrid storage to update both localStorage and database
+        const success = await HybridStorage.updateBucket(bucketId, {
+          title: bucketName,
+          targetAmount: parsedAmount,
+          backgroundColor: selectedColor
+        }, effectiveUser.id)
+        
+        if (success) {
+          console.log('✅ Bucket updated successfully:', bucketName)
+          
+          // Navigate to home page
+          router.push('/home')
+        } else {
+          console.error('❌ Failed to update bucket')
+          alert('Failed to update bucket. Please try again.')
+        }
+      }
+    } catch (error) {
+      console.error('❌ Error updating bucket:', error)
+      alert('An error occurred while updating the bucket. Please try again.')
     }
   }
 
@@ -217,8 +272,10 @@ function EditBucketContent() {
 
 export default function EditBucketPage() {
   return (
-    <Suspense fallback={<div>Loading...</div>}>
-      <EditBucketContent />
-    </Suspense>
+    <ProtectedRoute>
+      <Suspense fallback={<div>Loading...</div>}>
+        <EditBucketContent />
+      </Suspense>
+    </ProtectedRoute>
   )
 }

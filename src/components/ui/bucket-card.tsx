@@ -1,6 +1,7 @@
 import * as React from "react"
 import { cn } from "@/lib/utils"
 import { Progress } from "@/components/ui/progress"
+import { Repeat } from "lucide-react"
 
 export interface BucketCardProps extends React.HTMLAttributes<HTMLDivElement> {
   title: string
@@ -8,6 +9,7 @@ export interface BucketCardProps extends React.HTMLAttributes<HTMLDivElement> {
   targetAmount: number
   apy?: number
   backgroundColor?: string
+  hasAutoDeposit?: boolean
 }
 
 const BucketCard = React.forwardRef<HTMLDivElement, BucketCardProps>(
@@ -18,6 +20,7 @@ const BucketCard = React.forwardRef<HTMLDivElement, BucketCardProps>(
     targetAmount, 
     apy = 3.5, 
     backgroundColor = "#B6F3AD",
+    hasAutoDeposit = false,
     ...props 
   }, ref) => {
     const progress = Math.min((currentAmount / targetAmount) * 100, 100)
@@ -40,7 +43,7 @@ const BucketCard = React.forwardRef<HTMLDivElement, BucketCardProps>(
       <div
         ref={ref}
         className={cn(
-          "p-8 rounded-[32px] cursor-pointer transition-all duration-300 ease-out",
+          "p-8 rounded-[32px] cursor-pointer transition-all duration-300 ease-out relative",
           className
         )}
         style={{ 
@@ -54,6 +57,15 @@ const BucketCard = React.forwardRef<HTMLDivElement, BucketCardProps>(
         }}
         {...props}
       >
+        {/* Auto deposit indicator */}
+        {hasAutoDeposit && (
+          <div className="absolute top-6 right-6">
+            <div className="bg-black/10 rounded-full p-2">
+              <Repeat className="h-4 w-4 text-black/70" />
+            </div>
+          </div>
+        )}
+        
         {/* Header with title */}
         <div className="mb-1">
           <h3 className="text-[20px] font-bold tracking-tight text-black">
