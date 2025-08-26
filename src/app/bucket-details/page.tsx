@@ -368,7 +368,7 @@ function BucketDetailsContent() {
       
       // Clean up the URL parameters after showing animation
       setTimeout(() => {
-        const params = new URLSearchParams(searchParams.toString())
+        const params = new URLSearchParams(searchParams?.toString() || '')
         params.delete('fromTransfer')
         params.delete('transferAmount')
         window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}`)
@@ -451,7 +451,7 @@ function BucketDetailsContent() {
             >
               {bucketData.id !== 'main-bucket' && (
                 <DropdownMenuItem onClick={() => {
-                  const params = new URLSearchParams(searchParams.toString())
+                  const params = new URLSearchParams(searchParams?.toString() || '')
                   router.push(`/edit-bucket?${params.toString()}`)
                 }}>
                   <Edit className="h-4 w-4" />

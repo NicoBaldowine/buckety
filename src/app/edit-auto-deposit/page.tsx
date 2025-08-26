@@ -218,12 +218,12 @@ function EditAutoDepositContent() {
       
       if (bucket) {
         const params = new URLSearchParams({
-          id: bucket.id,
-          title: bucket.title,
-          currentAmount: bucket.currentAmount.toString(),
-          targetAmount: bucket.targetAmount.toString(),
-          backgroundColor: bucket.backgroundColor,
-          apy: bucket.apy.toString()
+          id: bucket.id || '',
+          title: bucket.title || '',
+          currentAmount: (bucket.currentAmount || 0).toString(),
+          targetAmount: (bucket.targetAmount || 0).toString(),
+          backgroundColor: bucket.backgroundColor || '#ffffff',
+          apy: (bucket.apy || 0).toString()
         })
         router.push(`/bucket-details?${params.toString()}`)
       } else {
@@ -259,12 +259,12 @@ function EditAutoDepositContent() {
       
       if (bucket) {
         const params = new URLSearchParams({
-          id: bucket.id,
-          title: bucket.title,
-          currentAmount: bucket.currentAmount.toString(),
-          targetAmount: bucket.targetAmount.toString(),
-          backgroundColor: bucket.backgroundColor,
-          apy: bucket.apy.toString()
+          id: bucket.id || '',
+          title: bucket.title || '',
+          currentAmount: (bucket.currentAmount || 0).toString(),
+          targetAmount: (bucket.targetAmount || 0).toString(),
+          backgroundColor: bucket.backgroundColor || '#ffffff',
+          apy: (bucket.apy || 0).toString()
         })
         router.push(`/bucket-details?${params.toString()}`)
       } else {

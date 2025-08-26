@@ -148,8 +148,8 @@ function AddMoneyContent() {
     setAccounts(allAccounts)
     
     // Check if we have a 'to' parameter from URL (coming from bucket details)
-    const toBucketId = searchParams.get('to')
-    const showAutoDepositParam = searchParams.get('showAutoDeposit')
+    const toBucketId = searchParams?.get('to') || null
+    const showAutoDepositParam = searchParams?.get('showAutoDeposit') || null
     
     if (toBucketId) {
       const mainBucketAccount = allAccounts.find(account => account.id === 'main-bucket')
@@ -223,12 +223,12 @@ function AddMoneyContent() {
         
         if (bucket) {
           const params = new URLSearchParams({
-            id: bucket.id,
-            title: bucket.title,
-            currentAmount: bucket.currentAmount.toString(),
-            targetAmount: bucket.targetAmount.toString(),
-            backgroundColor: bucket.backgroundColor,
-            apy: bucket.apy.toString(),
+            id: bucket.id || '',
+            title: bucket.title || '',
+            currentAmount: (bucket.currentAmount || 0).toString(),
+            targetAmount: (bucket.targetAmount || 0).toString(),
+            backgroundColor: bucket.backgroundColor || '#ffffff',
+            apy: (bucket.apy || 0).toString(),
             fromTransfer: 'true',
             transferAmount: transferAmount.toString()
           })
@@ -330,12 +330,12 @@ function AddMoneyContent() {
         }
         
         const params = new URLSearchParams({
-          id: bucket.id,
-          title: bucket.title,
-          currentAmount: bucket.currentAmount.toString(),
-          targetAmount: bucket.targetAmount.toString(),
-          backgroundColor: bucket.backgroundColor,
-          apy: bucket.apy.toString(),
+          id: bucket.id || '',
+          title: bucket.title || '',
+          currentAmount: (bucket.currentAmount || 0).toString(),
+          targetAmount: (bucket.targetAmount || 0).toString(),
+          backgroundColor: bucket.backgroundColor || '#ffffff',
+          apy: (bucket.apy || 0).toString(),
           fromAutoDeposit: 'true'
         })
         router.push(`/bucket-details?${params.toString()}`)
