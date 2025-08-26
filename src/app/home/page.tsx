@@ -339,7 +339,7 @@ function HomePageContent() {
   if (authLoading || (isLoading && !user)) {
     return (
       <div className="min-h-screen bg-background transition-all duration-500 ease-out">
-        <div className="max-w-[660px] mx-auto px-12 py-6">
+        <div className="max-w-[660px] mx-auto px-12 py-6 max-sm:px-4 max-sm:py-3">
           <HeaderSkeleton />
           <BalanceSkeleton />
           <MainBucketSkeleton />
@@ -361,7 +361,7 @@ function HomePageContent() {
           showStickyHeader ? 'translate-y-0 opacity-100' : '-translate-y-full opacity-0'
         }`}
       >
-        <div className="max-w-[660px] mx-auto px-12 py-4">
+        <div className="max-w-[660px] mx-auto px-12 py-4 max-sm:px-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <Button variant="primary" onClick={() => router.push('/create-bucket')}>
@@ -376,7 +376,7 @@ function HomePageContent() {
         </div>
       </div>
 
-      <div className="max-w-[660px] mx-auto px-12 py-6">
+      <div className="max-w-[660px] mx-auto px-12 py-6 max-sm:px-4 max-sm:py-3">
         {/* Top row with buttons and avatar */}
         <div ref={headerRef} className="flex items-center justify-between mb-15">
           <div className="flex items-center gap-3">
@@ -449,7 +449,7 @@ function HomePageContent() {
             <div className="flex-1">
               {/* Header with title */}
               <div className="mb-1">
-                <h3 className="text-[20px] font-bold tracking-tight text-foreground">
+                <h3 className="text-[20px] font-semibold tracking-tight text-foreground">
                   Main Bucket 🏦
                 </h3>
               </div>
@@ -467,13 +467,12 @@ function HomePageContent() {
             {/* Add balance button */}
             <div className="ml-4">
               <Button 
-                variant="outline"
-                size="sm"
+                variant="secondary"
                 onClick={(e) => {
                   e.stopPropagation()
                   // Handle add balance action
                 }}
-                className="text-[14px] h-[36px] px-4"
+                className="text-[14px] font-medium border border-white/20"
               >
                 Add funds
               </Button>

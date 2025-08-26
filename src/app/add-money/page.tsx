@@ -2,8 +2,9 @@
 
 import { Button } from "@/components/ui/button"
 import { Modal } from "@/components/ui/modal"
+import { Select, SelectItem } from "@/components/ui/select"
 import { ProtectedRoute } from "@/components/auth/protected-route"
-import { ArrowLeft, Repeat, ChevronRight, ChevronDown } from "lucide-react"
+import { ArrowLeft, Repeat, ChevronRight, ChevronDown, X } from "lucide-react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useState, useRef, useEffect } from "react"
 import { HybridStorage } from "@/lib/hybrid-storage"
@@ -40,8 +41,9 @@ function AddMoneyContent() {
   
   // Auto-deposit states
   const [showAutoDeposit, setShowAutoDeposit] = useState(false)
-  const [frequency, setFrequency] = useState<'daily' | 'weekly' | 'monthly'>('weekly')
-  const [endDate, setEndDate] = useState<'1_month' | '3_months' | '6_months' | '1_year' | 'never'>('3_months')
+  const [frequency, setFrequency] = useState<'daily' | 'weekly' | 'biweekly' | 'monthly'>('weekly')
+  const [endType, setEndType] = useState<'bucket_completed' | 'custom_date'>('bucket_completed')
+  const [customDate, setCustomDate] = useState('')
   const [isSettingAutoDeposit, setIsSettingAutoDeposit] = useState(false)
   
   const [isTyping, setIsTyping] = useState(false)
@@ -254,57 +256,92 @@ function AddMoneyContent() {
 
     try {
       // Calculate end date based on selection
-      let endDateValue: Date | null = null
-      const now = new Date()
+      let endDateValue: string | undefined = undefined
       
-      switch (endDate) {
-        case '1_month':
-          endDateValue = new Date(now.setMonth(now.getMonth() + 1))
-          break
-        case '3_months':
-          endDateValue = new Date(now.setMonth(now.getMonth() + 3))
-          break
-        case '6_months':
-          endDateValue = new Date(now.setMonth(now.getMonth() + 6))
-          break
-        case '1_year':
-          endDateValue = new Date(now.setFullYear(now.getFullYear() + 1))
-          break
-        case 'never':
-          endDateValue = null
-          break
+      if (endType === 'custom_date' && customDate) {
+        endDateValue = new Date(customDate).toISOString()
       }
 
-      const autoDeposit = await autoDepositService.createAutoDeposit({
+      // Create auto deposit with timeout
+      const autoDepositPromise = autoDepositService.createAutoDeposit({
         bucket_id: toAccount.id,
         amount: depositAmount,
         repeat_type: frequency,
-        end_type: endDateValue ? 'specific_date' : 'bucket_completed',
-        end_date: endDateValue ? endDateValue.toISOString() : undefined,
+        end_type: endType === 'custom_date' ? 'specific_date' : 'bucket_completed',
+        end_date: endDateValue,
         status: 'active',
         user_id: user?.id || '',
-        next_execution_date: new Date(Date.now() + (frequency === 'daily' ? 86400000 : frequency === 'weekly' ? 604800000 : 2592000000)).toISOString()
+        next_execution_date: new Date(Date.now() + (
+          frequency === 'daily' ? 86400000 : 
+          frequency === 'weekly' ? 604800000 : 
+          frequency === 'biweekly' ? 1209600000 :
+          2592000000
+        )).toISOString()
       })
 
-      if (autoDeposit) {
-        console.log('✅ Auto-deposit created successfully')
-        
-        // Navigate to bucket details
-        const localBuckets = HybridStorage.getLocalBuckets(user?.id)
-        const bucket = localBuckets.find((b: { id: string }) => b.id === toAccount.id)
-        
-        if (bucket) {
-          const params = new URLSearchParams({
-            id: bucket.id,
-            title: bucket.title,
-            currentAmount: bucket.currentAmount.toString(),
-            targetAmount: bucket.targetAmount.toString(),
-            backgroundColor: bucket.backgroundColor,
-            apy: bucket.apy.toString(),
-            fromAutoDeposit: 'true'
-          })
-          router.push(`/bucket-details?${params.toString()}`)
+      // Create timeout promise
+      const timeoutPromise = new Promise<null>((resolve) => {
+        setTimeout(() => {
+          console.warn('Auto deposit creation timed out after 5 seconds')
+          resolve(null)
+        }, 5000)
+      })
+
+      // Race between auto deposit creation and timeout
+      const autoDeposit = await Promise.race([autoDepositPromise, timeoutPromise])
+
+      // Log result for debugging
+      console.log('Auto-deposit creation result:', autoDeposit)
+      
+      // Store auto deposit info in localStorage for immediate display
+      const autoDepositInfo = {
+        id: autoDeposit?.id || `local-${Date.now()}`,
+        bucket_id: toAccount.id,
+        amount: depositAmount,
+        repeat_type: frequency,
+        end_type: endType === 'custom_date' ? 'specific_date' : 'bucket_completed',
+        end_date: endDateValue,
+        status: 'active',
+        user_id: user?.id || '',
+        next_execution_date: new Date(Date.now() + (
+          frequency === 'daily' ? 86400000 : 
+          frequency === 'weekly' ? 604800000 : 
+          frequency === 'biweekly' ? 1209600000 :
+          2592000000
+        )).toISOString(),
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }
+      
+      // Store in localStorage for immediate display
+      const autoDepositsKey = `auto_deposits_${toAccount.id}`
+      localStorage.setItem(autoDepositsKey, JSON.stringify([autoDepositInfo]))
+      console.log('✅ Stored auto deposit in localStorage:', autoDepositInfo)
+      
+      // Navigate to bucket details regardless of database result
+      const localBuckets = HybridStorage.getLocalBuckets(user?.id)
+      const bucket = localBuckets.find((b: { id: string }) => b.id === toAccount.id)
+      
+      if (bucket) {
+        if (autoDeposit) {
+          console.log('✅ Auto-deposit created successfully in database')
+        } else {
+          console.warn('⚠️ Auto-deposit creation failed in database, but continuing with localStorage')
         }
+        
+        const params = new URLSearchParams({
+          id: bucket.id,
+          title: bucket.title,
+          currentAmount: bucket.currentAmount.toString(),
+          targetAmount: bucket.targetAmount.toString(),
+          backgroundColor: bucket.backgroundColor,
+          apy: bucket.apy.toString(),
+          fromAutoDeposit: 'true'
+        })
+        router.push(`/bucket-details?${params.toString()}`)
+      } else {
+        console.error('Bucket not found in localStorage')
+        alert('Error: Bucket not found')
       }
     } catch (error) {
       console.error('Error creating auto-deposit:', error)
@@ -330,7 +367,7 @@ function AddMoneyContent() {
 
   return (
     <div className="min-h-screen bg-background transition-all duration-500 ease-out">
-      <div className="max-w-[660px] mx-auto px-12 py-6">
+      <div className="max-w-[660px] mx-auto px-12 py-6 max-sm:px-4 max-sm:py-3">
         {/* Header */}
         <div 
           className="flex items-center justify-between mb-15"
@@ -442,19 +479,15 @@ function AddMoneyContent() {
                 <label className="text-[12px] text-foreground/60 font-medium mb-2 block">
                   Frequency
                 </label>
-                <button
-                  className="w-full flex items-center justify-between px-4 py-3 bg-secondary rounded-xl hover:bg-secondary/80 transition-colors"
-                  onClick={() => {
-                    // Simple cycle through options for now
-                    const options: Array<'daily' | 'weekly' | 'monthly'> = ['daily', 'weekly', 'monthly']
-                    const currentIndex = options.indexOf(frequency)
-                    const nextIndex = (currentIndex + 1) % options.length
-                    setFrequency(options[nextIndex])
-                  }}
+                <Select
+                  value={frequency}
+                  onValueChange={(value) => setFrequency(value as 'daily' | 'weekly' | 'biweekly' | 'monthly')}
                 >
-                  <span className="text-[14px] font-medium">{frequencyOptions[frequency]}</span>
-                  <ChevronDown className="h-4 w-4 text-foreground/50" />
-                </button>
+                  <SelectItem value="daily">Daily</SelectItem>
+                  <SelectItem value="weekly">Weekly</SelectItem>
+                  <SelectItem value="biweekly">Bi-weekly</SelectItem>
+                  <SelectItem value="monthly">Monthly</SelectItem>
+                </Select>
               </div>
 
               {/* End Date Dropdown */}
@@ -462,19 +495,37 @@ function AddMoneyContent() {
                 <label className="text-[12px] text-foreground/60 font-medium mb-2 block">
                   End when
                 </label>
-                <button
-                  className="w-full flex items-center justify-between px-4 py-3 bg-secondary rounded-xl hover:bg-secondary/80 transition-colors"
-                  onClick={() => {
-                    // Simple cycle through options for now
-                    const options: Array<'1_month' | '3_months' | '6_months' | '1_year' | 'never'> = ['1_month', '3_months', '6_months', '1_year', 'never']
-                    const currentIndex = options.indexOf(endDate)
-                    const nextIndex = (currentIndex + 1) % options.length
-                    setEndDate(options[nextIndex])
-                  }}
-                >
-                  <span className="text-[14px] font-medium">{endDateOptions[endDate]}</span>
-                  <ChevronDown className="h-4 w-4 text-foreground/50" />
-                </button>
+                {endType === 'custom_date' ? (
+                  <div className="relative">
+                    <input
+                      type="date"
+                      value={customDate}
+                      onChange={(e) => setCustomDate(e.target.value)}
+                      min={new Date().toISOString().split('T')[0]}
+                      max={new Date(new Date().setFullYear(new Date().getFullYear() + 10)).toISOString().split('T')[0]}
+                      className="flex h-12 w-full items-center rounded-xl border border-foreground/20 bg-background px-4 py-3 pr-12 text-[16px] font-medium text-foreground focus:outline-none focus:border-foreground/40"
+                      style={{ letterSpacing: '-0.03em' }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEndType('bucket_completed')
+                        setCustomDate('')
+                      }}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-foreground/40 hover:text-foreground transition-colors"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                ) : (
+                  <Select
+                    value={endType}
+                    onValueChange={(value) => setEndType(value as 'bucket_completed' | 'custom_date')}
+                  >
+                    <SelectItem value="bucket_completed">Bucket completed</SelectItem>
+                    <SelectItem value="custom_date">Custom date</SelectItem>
+                  </Select>
+                )}
               </div>
             </div>
           </div>
@@ -482,24 +533,29 @@ function AddMoneyContent() {
 
         {/* Action Buttons */}
         <div 
-          className="mt-16 flex justify-between items-center gap-4"
+          className="mt-16 flex justify-between items-center gap-3"
           style={{ animation: 'fadeInUp 0.5s ease-out 0.4s both' }}
         >
           {showAutoDeposit ? (
             <>
               <Button 
                 variant="secondary"
-                onClick={handleConvert}
-                disabled={!amount || parseFloat(amount) <= 0 || hasInsufficientBalance}
-                className="flex-1"
+                onClick={() => setShowAutoDeposit(false)}
+                className="text-[14px] font-medium"
               >
-                Convert
+                Cancel
               </Button>
               <Button 
                 variant="primary"
                 onClick={handleSetAutoDeposit}
-                disabled={!amount || parseFloat(amount) <= 0 || hasInsufficientBalance || isSettingAutoDeposit}
-                className="flex-1"
+                disabled={
+                  !amount || 
+                  parseFloat(amount) <= 0 || 
+                  hasInsufficientBalance || 
+                  isSettingAutoDeposit ||
+                  (endType === 'custom_date' && !customDate)
+                }
+                className=""
               >
                 {isSettingAutoDeposit ? 'Setting...' : 'Set auto deposit'}
               </Button>
@@ -510,7 +566,7 @@ function AddMoneyContent() {
                 variant="secondary"
                 onClick={() => setShowAutoDeposit(true)}
                 icon={<Repeat />}
-                className="text-[14px] font-medium bg-transparent border border-foreground/20 text-foreground/60 hover:text-foreground hover:border-foreground/40 hover:bg-transparent"
+                className="text-[14px] font-medium"
               >
                 Auto deposit
               </Button>
@@ -524,18 +580,6 @@ function AddMoneyContent() {
             </>
           )}
         </div>
-
-        {/* Cancel auto-deposit link */}
-        {showAutoDeposit && (
-          <div className="text-center mt-4">
-            <button
-              onClick={() => setShowAutoDeposit(false)}
-              className="text-[14px] text-foreground/60 hover:text-foreground transition-colors cursor-pointer"
-            >
-              Cancel auto deposit
-            </button>
-          </div>
-        )}
       </div>
 
       {/* Account Selection Modal */}

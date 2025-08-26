@@ -24,8 +24,12 @@ export function ProtectedRoute({ children, redirectTo = '/login' }: ProtectedRou
       return
     }
     
+    // Only redirect if we're not loading and definitely don't have a user
     if (!loading && !user) {
+      console.log('ProtectedRoute: No user found, redirecting to login')
       router.push(redirectTo)
+    } else if (user) {
+      console.log('ProtectedRoute: User authenticated:', user.email)
     }
   }, [user, loading, router, redirectTo, isDemoMode])
 

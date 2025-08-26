@@ -44,13 +44,18 @@ export function AccountMenu({ className }: AccountMenuProps) {
 
   const handleSignOut = async () => {
     try {
+      console.log('Starting logout process...')
+      
       // Clear demo mode if it exists
       localStorage.removeItem('demo_mode')
       localStorage.removeItem('demo_user')
       localStorage.removeItem('just_logged_in')
       
       // Sign out from auth service
+      console.log('Calling signOut...')
       await signOut()
+      
+      console.log('SignOut completed, redirecting...')
       
       // Force navigation to login page
       window.location.href = '/login'

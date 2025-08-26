@@ -69,7 +69,7 @@ const Progress = React.forwardRef<HTMLDivElement, ProgressProps>(
             <rect
               x="1"
               y="1"
-              width={`calc(${percentage}% - 2px)`}
+              width="100%"
               height="38"
               fill={`url(#diagonal-stripes-${uniqueId})`}
             />
@@ -105,11 +105,14 @@ const Progress = React.forwardRef<HTMLDivElement, ProgressProps>(
         {isCompleted && showCompletionBadge && (
           <div 
             className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 pointer-events-none"
-            style={{ zIndex: 10 }}
+            style={{ zIndex: 50 }}
           >
-            <div className="inline-flex items-center gap-1 px-2 py-1 bg-black/10 text-black rounded-full h-6">
-              <span className="text-xs">🎉</span>
-              <span className="text-[11px] font-semibold" style={{ letterSpacing: '-0.03em' }}>
+            <div 
+              className="inline-flex items-center gap-1 px-3 py-1.5 text-black rounded-full h-7 shadow-sm border border-black/10"
+              style={{ backgroundColor: backgroundColor || 'white' }}
+            >
+              <span className="text-sm">🎉</span>
+              <span className="text-[12px] font-semibold" style={{ letterSpacing: '-0.02em' }}>
                 Bucket completed
               </span>
             </div>

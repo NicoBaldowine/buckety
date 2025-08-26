@@ -100,20 +100,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signOut = async () => {
     const currentUser = user
-    await authService.signOut()
     
-    // Clear user-specific localStorage data
-    if (currentUser) {
-      localStorage.removeItem(`buckets_${currentUser.id}`)
-      localStorage.removeItem(`mainBucket_${currentUser.id}`)
+    try {
+      console.log('AuthContext: Starting signOut...')
+      
+      // Call Supabase signOut
+      await authService.signOut()
+      console.log('AuthContext: Supabase signOut completed')
+      
+      // Clear user-specific localStorage data
+      if (currentUser) {
+        localStorage.removeItem(`buckets_${currentUser.id}`)
+        localStorage.removeItem(`mainBucket_${currentUser.id}`)
+      }
+      
+      // Clear old global localStorage keys (legacy cleanup)
+      localStorage.removeItem('buckets')
+      localStorage.removeItem('mainBucket')
+      
+      console.log('AuthContext: Clearing user state...')
+      setUser(null)
+      setSession(null)
+      
+      console.log('AuthContext: SignOut process completed')
+    } catch (error) {
+      console.error('AuthContext: Error during signOut:', error)
+      // Even if there's an error, clear the local state
+      setUser(null)
+      setSession(null)
+      throw error
     }
-    
-    // Clear old global localStorage keys (legacy cleanup)
-    localStorage.removeItem('buckets')
-    localStorage.removeItem('mainBucket')
-    
-    setUser(null)
-    setSession(null)
   }
 
   return (

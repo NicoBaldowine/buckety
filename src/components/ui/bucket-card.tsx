@@ -1,7 +1,7 @@
 import * as React from "react"
 import { cn } from "@/lib/utils"
 import { Progress } from "@/components/ui/progress"
-import { Repeat } from "lucide-react"
+import { Repeat, CheckCircle } from "lucide-react"
 
 export interface BucketCardProps extends React.HTMLAttributes<HTMLDivElement> {
   title: string
@@ -58,7 +58,7 @@ const BucketCard = React.forwardRef<HTMLDivElement, BucketCardProps>(
         {...props}
       >
         {/* Auto deposit indicator */}
-        {hasAutoDeposit && (
+        {hasAutoDeposit && progress < 100 && (
           <div className="absolute top-6 right-6">
             <div className="bg-black/10 rounded-full p-2">
               <Repeat className="h-4 w-4 text-black/70" />
@@ -66,9 +66,18 @@ const BucketCard = React.forwardRef<HTMLDivElement, BucketCardProps>(
           </div>
         )}
         
+        {/* Completion indicator */}
+        {progress >= 100 && (
+          <div className="absolute top-6 right-6">
+            <div className="bg-black/10 rounded-full p-2">
+              <CheckCircle className="h-4 w-4 text-black/70" />
+            </div>
+          </div>
+        )}
+        
         {/* Header with title */}
         <div className="mb-1">
-          <h3 className="text-[20px] font-bold tracking-tight text-black">
+          <h3 className="text-[20px] font-semibold tracking-tight text-black">
             {title}
           </h3>
         </div>
@@ -86,8 +95,18 @@ const BucketCard = React.forwardRef<HTMLDivElement, BucketCardProps>(
         </div>
         
         {/* Progress bar */}
-        <div>
+        <div className="relative">
           <Progress value={progress} max={100} className="w-full" backgroundColor={backgroundColor} />
+          {progress < 100 && (
+            <div 
+              className="absolute top-1/2 transform -translate-y-1/2 pointer-events-none"
+              style={{ left: `max(calc(${progress}% + 8px), 16px)` }}
+            >
+              <span className="text-[14px] font-semibold text-black/70">
+                {progress.toFixed(0)}%
+              </span>
+            </div>
+          )}
         </div>
       </div>
     )

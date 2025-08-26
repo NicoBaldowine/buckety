@@ -133,6 +133,23 @@ export class HybridStorage {
         mainBucket.currentAmount -= amount
         localStorage.setItem(this.getMainBucketKey(userId), JSON.stringify(mainBucket))
 
+        // Log transfer activity for main bucket
+        const transferHistory = JSON.parse(localStorage.getItem('main_bucket_transfers') || '[]')
+        transferHistory.unshift({
+          id: `activity-${Date.now()}`,
+          title: `To ${toBucket.title}`,
+          amount: -amount,
+          date: new Date().toISOString().split('T')[0],
+          activity_type: 'money_removed',
+          from_source: 'Main Bucket',
+          to_destination: toBucket.title,
+          bucket_id: 'main-bucket'
+        })
+        // Keep only last 50 activities
+        if (transferHistory.length > 50) transferHistory.pop()
+        localStorage.setItem('main_bucket_transfers', JSON.stringify(transferHistory))
+        localStorage.setItem(`activities_main-bucket`, JSON.stringify(transferHistory))
+
         // Sync to database
         await transferService.transferToSavingsBucket(toBucketId, toBucket.currentAmount, amount, userId || this.USER_ID)
         
@@ -157,6 +174,23 @@ export class HybridStorage {
         const mainBucket = this.getLocalMainBucket(userId)
         mainBucket.currentAmount += amount
         localStorage.setItem(this.getMainBucketKey(userId), JSON.stringify(mainBucket))
+
+        // Log transfer activity for main bucket (money returned)
+        const transferHistory = JSON.parse(localStorage.getItem('main_bucket_transfers') || '[]')
+        transferHistory.unshift({
+          id: `activity-${Date.now()}`,
+          title: `From ${fromBucket.title}`,
+          amount: amount,
+          date: new Date().toISOString().split('T')[0],
+          activity_type: 'money_added',
+          from_source: fromBucket.title,
+          to_destination: 'Main Bucket',
+          bucket_id: 'main-bucket'
+        })
+        // Keep only last 50 activities
+        if (transferHistory.length > 50) transferHistory.pop()
+        localStorage.setItem('main_bucket_transfers', JSON.stringify(transferHistory))
+        localStorage.setItem(`activities_main-bucket`, JSON.stringify(transferHistory))
 
         // Sync to database
         await transferService.transferFromSavingsBucket(fromBucketId, amount, userId || this.USER_ID)
@@ -219,8 +253,23 @@ export class HybridStorage {
         try {
           let freshActivities: Activity[]
           if (bucketId === 'main-bucket') {
-            // For main bucket, get all transfer activities where money was sent to other buckets
-            freshActivities = await activityService.getMainBucketTransferActivities(userId || this.USER_ID)
+            // For main bucket, get transfer history from localStorage
+            const transferHistory = localStorage.getItem('main_bucket_transfers') || '[]'
+            try {
+              freshActivities = JSON.parse(transferHistory)
+            } catch (e) {
+              freshActivities = []
+            }
+            
+            // Also try to get from database if available
+            try {
+              const dbActivities = await activityService.getMainBucketTransferActivities(userId || this.USER_ID)
+              if (dbActivities && dbActivities.length > 0) {
+                freshActivities = dbActivities
+              }
+            } catch (dbError) {
+              console.warn('Could not load main bucket activities from database:', dbError)
+            }
           } else {
             freshActivities = await activityService.getActivities(bucketId)
           }

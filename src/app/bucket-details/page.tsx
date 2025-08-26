@@ -278,13 +278,35 @@ function BucketDetailsContent() {
     const loadAutoDeposits = async () => {
       if (bucketData.id && bucketData.id !== 'main-bucket') {
         setLoadingAutoDeposits(true)
+        
+        // First check localStorage for immediate display
+        const autoDepositsKey = `auto_deposits_${bucketData.id}`
+        const localAutoDeposits = localStorage.getItem(autoDepositsKey)
+        if (localAutoDeposits) {
+          try {
+            const deposits = JSON.parse(localAutoDeposits)
+            if (deposits && deposits.length > 0) {
+              setAutoDeposits(deposits)
+              console.log('✅ Loaded auto deposits from localStorage:', deposits)
+            }
+          } catch (e) {
+            console.warn('Error parsing local auto deposits:', e)
+          }
+        } else {
+          console.log('❌ No auto deposits found in localStorage for bucket:', bucketData.id)
+        }
+        
+        // Then try to load from database
         try {
           const bucketAutoDeposits = await autoDepositService.getBucketAutoDeposits(bucketData.id)
-          setAutoDeposits(bucketAutoDeposits)
+          if (bucketAutoDeposits && bucketAutoDeposits.length > 0) {
+            setAutoDeposits(bucketAutoDeposits)
+            // Update localStorage with database data
+            localStorage.setItem(autoDepositsKey, JSON.stringify(bucketAutoDeposits))
+          }
         } catch (error) {
-          console.warn('Auto deposits not available (database table may not exist):', error)
-          // Gracefully handle missing auto_deposits table
-          setAutoDeposits([])
+          console.warn('Auto deposits not available from database:', error)
+          // Keep localStorage data if database fails
         } finally {
           setLoadingAutoDeposits(false)
         }
@@ -384,8 +406,8 @@ function BucketDetailsContent() {
 
   const handleManageAutoDeposit = () => {
     if (autoDeposits.length > 0) {
-      // Navigate to add money page in auto-deposit mode
-      router.push(`/add-money?to=${bucketData.id}&autoDepositId=${autoDeposits[0].id}`)
+      // Navigate to edit auto deposit page
+      router.push(`/edit-auto-deposit?bucket=${bucketData.id}`)
     }
   }
 
@@ -396,7 +418,7 @@ function BucketDetailsContent() {
         backgroundColor: bucketData.backgroundColor
       }}
     >
-      <div className="max-w-[660px] mx-auto px-12 py-6">
+      <div className="max-w-[660px] mx-auto px-12 py-6 max-sm:px-4 max-sm:py-3">
         {/* Header with navigation and actions */}
         <div 
           className="flex items-center justify-between mb-15"
@@ -442,12 +464,23 @@ function BucketDetailsContent() {
               </DropdownMenuItem>
               {/* Only show auto deposit option if bucket is not completed */}
               {!(displayCurrentAmount >= bucketData.targetAmount) && (
-                <DropdownMenuItem onClick={() => {
-                  router.push(`/add-money?to=${bucketData.id}&showAutoDeposit=true`)
-                }}>
-                  <Repeat className="h-4 w-4" />
-                  Auto deposit
-                </DropdownMenuItem>
+                <>
+                  {autoDeposits.length > 0 ? (
+                    <DropdownMenuItem onClick={() => {
+                      router.push(`/edit-auto-deposit?bucket=${bucketData.id}`)
+                    }}>
+                      <Repeat className="h-4 w-4" />
+                      Edit auto deposit
+                    </DropdownMenuItem>
+                  ) : (
+                    <DropdownMenuItem onClick={() => {
+                      router.push(`/add-money?to=${bucketData.id}&showAutoDeposit=true`)
+                    }}>
+                      <Repeat className="h-4 w-4" />
+                      Auto deposit
+                    </DropdownMenuItem>
+                  )}
+                </>
               )}
               {bucketData.id !== 'main-bucket' && (
                 <DropdownMenuItem onClick={() => setShowDeleteModal(true)}>
@@ -527,7 +560,7 @@ function BucketDetailsContent() {
         {/* Progress bar - only for savings buckets, not main bucket */}
         {bucketData.id !== 'main-bucket' && (
           <div 
-            className="mb-10"
+            className="mb-10 relative"
             style={{ animation: 'fadeInUp 0.5s ease-out 0.3s both' }}
           >
             <Progress 
@@ -538,16 +571,36 @@ function BucketDetailsContent() {
               showCompletionBadge={displayCurrentAmount >= bucketData.targetAmount}
               className="w-full" 
             />
+            {animatedProgress < 100 && (
+              <div 
+                className="absolute top-1/2 transform -translate-y-1/2 pointer-events-none"
+                style={{ left: `max(calc(${animatedProgress}% + 8px), 16px)` }}
+              >
+                <span className="text-[14px] font-semibold text-black/70">
+                  {Math.round(animatedProgress)}%
+                </span>
+              </div>
+            )}
           </div>
         )}
 
         {/* Auto deposit banner - only for savings buckets with auto deposits */}
-        {bucketData.id !== 'main-bucket' && !loadingAutoDeposits && autoDeposits.length > 0 && (
-          <AutoDepositBanner 
-            autoDeposit={autoDeposits[0]} 
-            onManage={handleManageAutoDeposit}
-          />
-        )}
+        {(() => {
+          const showBanner = bucketData.id !== 'main-bucket' && !loadingAutoDeposits && autoDeposits.length > 0
+          console.log('Banner conditions:', {
+            isNotMainBucket: bucketData.id !== 'main-bucket',
+            loadingAutoDeposits,
+            autoDepositsCount: autoDeposits.length,
+            showBanner,
+            bucketId: bucketData.id
+          })
+          return showBanner ? (
+            <AutoDepositBanner 
+              autoDeposit={autoDeposits[0]} 
+              onManage={handleManageAutoDeposit}
+            />
+          ) : null
+        })()}
 
         {/* Activity list */}
         <div style={{ animation: 'fadeInUp 0.5s ease-out 0.4s both' }}>

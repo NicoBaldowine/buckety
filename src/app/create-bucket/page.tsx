@@ -173,7 +173,7 @@ function CreateBucketContent() {
 
   return (
     <div className="min-h-screen bg-background transition-all duration-500 ease-out">
-      <div className="max-w-[660px] mx-auto px-12 py-6">
+      <div className="max-w-[660px] mx-auto px-12 py-6 max-sm:px-4 max-sm:py-3">
         {/* Header with back button */}
         <div 
           className="flex items-center justify-between mb-15"

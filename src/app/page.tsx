@@ -48,78 +48,72 @@ export default function LandingPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center transition-all duration-500 ease-out">
-      <div className="w-full max-w-[500px] px-8 py-6 text-center">
-        {/* Logo/Title */}
-        <div 
-          className="mb-12"
-          style={{ animation: 'fadeInUp 0.5s ease-out 0.1s both' }}
-        >
-          <h1 
-            className="text-[48px] font-bold text-foreground mb-4"
-            style={{ letterSpacing: '-0.03em' }}
-          >
-            Buckety
-          </h1>
-          <p 
-            className="text-[20px] text-foreground/70"
-            style={{ letterSpacing: '-0.03em' }}
-          >
-            Smart savings with goal-based buckets
-          </p>
+    <div className="min-h-screen bg-background flex flex-col">
+      {/* Header */}
+      <header className="flex items-center justify-between p-6">
+        <div className="flex items-center gap-2">
+          {/* Logo - switches based on theme */}
+          <img 
+            src="/zuma-dark.svg" 
+            alt="Zuma" 
+            className="h-8 dark:hidden"
+          />
+          <img 
+            src="/zuma-light.svg" 
+            alt="Zuma" 
+            className="h-8 hidden dark:block"
+          />
         </div>
-
-        {/* Features */}
-        <div 
-          className="mb-12 space-y-4"
-          style={{ animation: 'fadeInUp 0.5s ease-out 0.2s both' }}
-        >
-          <div className="text-[16px] text-foreground/60">
-            ✨ Create personalized savings goals
-          </div>
-          <div className="text-[16px] text-foreground/60">
-            🚀 Auto-deposit to reach your targets
-          </div>
-          <div className="text-[16px] text-foreground/60">
-            📈 Track progress with beautiful visuals
-          </div>
-        </div>
-
-        {/* CTA Buttons */}
-        <div 
-          className="space-y-4"
-          style={{ animation: 'fadeInUp 0.5s ease-out 0.3s both' }}
-        >
+        
+        <div className="flex items-center gap-4">
+          <Button 
+            variant="ghost"
+            onClick={() => router.push('/login')}
+            className="text-foreground"
+          >
+            Log in
+          </Button>
           <Button 
             variant="primary"
             onClick={() => router.push('/sign-up')}
-            className="w-full"
+            className="bg-black text-white hover:bg-black/90 dark:bg-white dark:text-black dark:hover:bg-white/90"
           >
-            Get started for free
+            Sign in
           </Button>
-          
-          <div className="text-[14px] text-foreground/60">
-            Already have an account?{' '}
-            <button 
-              onClick={() => router.push('/login')}
-              className="text-foreground font-semibold hover:opacity-80 transition-opacity"
-            >
-              Sign in
-            </button>
-          </div>
-          
-          {/* Demo Mode Button */}
-          <div className="mt-8 pt-8 border-t border-foreground/10">
-            <Button 
-              variant="secondary"
-              onClick={() => router.push('/demo')}
-              className="w-full"
-            >
-              Try Demo Mode (No Sign-in Required)
-            </Button>
-          </div>
         </div>
-      </div>
+      </header>
+
+      {/* Main Content */}
+      <main className="flex-1 flex items-center justify-center px-6 py-12">
+        <div className="max-w-4xl mx-auto text-center">
+          {/* Main Heading */}
+          <h1 
+            className="text-[96px] font-medium text-foreground leading-none mb-6"
+            style={{ 
+              fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+              fontWeight: 500,
+              letterSpacing: '-0.07em' 
+            }}
+          >
+            Smarter Saving,<br />
+            Simplified.
+          </h1>
+
+          {/* Subtitle */}
+          <p className="text-[14px] text-foreground/60 mb-12 max-w-2xl mx-auto leading-relaxed">
+            Organize your money into flexible buckets, earn yield on your balance, and reach your goals faster. One account, multiple purposes, all with a seamless, modern experience.
+          </p>
+
+          {/* CTA Button */}
+          <Button 
+            variant="primary"
+            onClick={() => router.push('/sign-up')}
+            className="bg-black text-white hover:bg-black/90 dark:bg-white dark:text-black dark:hover:bg-white/90 px-8 py-3 text-[16px] font-medium rounded-lg"
+          >
+            Get Started
+          </Button>
+        </div>
+      </main>
     </div>
   )
 }

@@ -542,6 +542,8 @@ export const autoDepositService = {
   // Create a new auto deposit rule
   async createAutoDeposit(autoDeposit: Omit<AutoDeposit, 'id' | 'created_at' | 'updated_at'>): Promise<AutoDeposit | null> {
     try {
+      console.log('🚀 Creating auto deposit with data:', autoDeposit)
+      
       const { data, error } = await supabase
         .from('auto_deposits')
         .insert([autoDeposit])
@@ -549,15 +551,24 @@ export const autoDepositService = {
         .single()
       
       if (error) {
-        console.error('Error creating auto deposit:', error)
+        console.error('❌ Error creating auto deposit:', error)
         console.error('Error details:', error.message, error.details, error.hint)
+        
+        // Check for common issues
+        if (error.message?.includes('relation "auto_deposits" does not exist')) {
+          console.error('💡 Auto deposits table not found. Please run the database migration.')
+        }
+        if (error.message?.includes('permission denied')) {
+          console.error('💡 Permission denied. Check RLS policies.')
+        }
+        
         return null
       }
       
       console.log('✅ Auto deposit created successfully in database:', data)
       return data
     } catch (error) {
-      console.error('Error creating auto deposit:', error)
+      console.error('❌ Unexpected error creating auto deposit:', error)
       return null
     }
   },
