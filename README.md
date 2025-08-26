@@ -1,6 +1,6 @@
 # Buckety - Smart Savings App
 
-A Next.js application for organizing your money into flexible buckets and tracking savings goals. 🚀
+A Next.js application for organizing your money into flexible buckets and tracking savings goals. 💰
 
 ## Environment Setup
 
