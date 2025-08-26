@@ -5,23 +5,39 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
 
 // Create a dummy client for build time when env vars might not be available
 const createSupabaseClient = () => {
+  // For production, we need real credentials
+  const isProduction = typeof window !== 'undefined' && window.location.hostname !== 'localhost'
+  
   try {
     if (!supabaseUrl || !supabaseAnonKey) {
-      console.warn('Supabase environment variables not found. Using placeholder for build.')
-      // Return a placeholder client that won't crash during build
+      // If we're in production and don't have credentials, that's a critical error
+      if (isProduction) {
+        console.error('CRITICAL: Supabase environment variables not found in production!')
+        console.log('URL:', supabaseUrl ? 'Found' : 'Missing')
+        console.log('Key:', supabaseAnonKey ? 'Found' : 'Missing')
+      }
+      // Only use placeholder during build time, not in production runtime
+      if (typeof window === 'undefined') {
+        return createClient(
+          'https://placeholder.supabase.co',
+          'placeholder-key'
+        )
+      }
+      // In production runtime, use the hardcoded values as fallback
       return createClient(
-        'https://placeholder.supabase.co',
-        'placeholder-key'
+        'https://tbhfbpykuidbcfmmcskf.supabase.co',
+        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRiaGZicHlrdWlkYmNmbW1jc2tmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU2NTc3NzQsImV4cCI6MjA3MTIzMzc3NH0.lOWd7Q3FdU_o1f6pTQgUvevv56ChsT4fmzdBlwwFY3M'
       )
     }
     // Validate URL format before passing to createClient
     new URL(supabaseUrl) // This will throw if URL is invalid
     return createClient(supabaseUrl, supabaseAnonKey)
   } catch (error) {
-    console.warn('Invalid Supabase URL, using placeholder:', error)
+    console.warn('Invalid Supabase URL, using hardcoded values:', error)
+    // Use hardcoded values as absolute fallback
     return createClient(
-      'https://placeholder.supabase.co',
-      'placeholder-key'
+      'https://tbhfbpykuidbcfmmcskf.supabase.co',
+      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRiaGZicHlrdWlkYmNmbW1jc2tmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU2NTc3NzQsImV4cCI6MjA3MTIzMzc3NH0.lOWd7Q3FdU_o1f6pTQgUvevv56ChsT4fmzdBlwwFY3M'
     )
   }
 }
