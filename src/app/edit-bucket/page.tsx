@@ -126,8 +126,7 @@ function EditBucketContent() {
             ...buckets[bucketIndex],
             title: bucketName,
             targetAmount: parsedAmount,
-            backgroundColor: selectedColor,
-            updated_at: new Date().toISOString()
+            backgroundColor: selectedColor
           }
           localStorage.setItem(`buckets_${effectiveUser.id}`, JSON.stringify(buckets))
           
