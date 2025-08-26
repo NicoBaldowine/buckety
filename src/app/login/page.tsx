@@ -67,10 +67,12 @@ export default function LoginPage() {
       
       if (result.success) {
         console.log('Sign in successful, redirecting to home...')
-        // Set a flag to prevent redirect loop
-        localStorage.setItem('just_logged_in', 'true')
-        // Force a hard navigation to ensure auth state updates
-        window.location.href = '/home'
+        // Set a flag to prevent redirect loop (only on client side)
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('just_logged_in', 'true')
+          // Force a hard navigation to ensure auth state updates
+          window.location.href = '/home'
+        }
       } else {
         console.error('Sign in failed:', result.error)
         setError(result.error || "Failed to sign in")
