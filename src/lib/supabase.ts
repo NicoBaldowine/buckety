@@ -5,15 +5,25 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
 
 // Create a dummy client for build time when env vars might not be available
 const createSupabaseClient = () => {
-  if (!supabaseUrl || !supabaseAnonKey) {
-    console.warn('Supabase environment variables not found. Using placeholder for build.')
-    // Return a placeholder client that won't crash during build
+  try {
+    if (!supabaseUrl || !supabaseAnonKey) {
+      console.warn('Supabase environment variables not found. Using placeholder for build.')
+      // Return a placeholder client that won't crash during build
+      return createClient(
+        'https://placeholder.supabase.co',
+        'placeholder-key'
+      )
+    }
+    // Validate URL format before passing to createClient
+    new URL(supabaseUrl) // This will throw if URL is invalid
+    return createClient(supabaseUrl, supabaseAnonKey)
+  } catch (error) {
+    console.warn('Invalid Supabase URL, using placeholder:', error)
     return createClient(
       'https://placeholder.supabase.co',
       'placeholder-key'
     )
   }
-  return createClient(supabaseUrl, supabaseAnonKey)
 }
 
 export const supabase = createSupabaseClient()

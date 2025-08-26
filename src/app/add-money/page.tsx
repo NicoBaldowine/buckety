@@ -126,7 +126,7 @@ function AddMoneyContent() {
 
   // Load accounts from localStorage
   useEffect(() => {
-    if (!user) return
+    if (!user || typeof window === 'undefined') return
     
     const savedBuckets = HybridStorage.getLocalBuckets(user.id)
     const mainBucket = HybridStorage.getLocalMainBucket(user.id)
