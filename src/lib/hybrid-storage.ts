@@ -17,6 +17,7 @@ export class HybridStorage {
 
   // Load initial data from database to localStorage
   static async initializeFromDatabase(userId?: string): Promise<void> {
+    if (typeof window === 'undefined') return // Skip on server-side
     try {
       // Load buckets from database
       const buckets = await bucketService.getBuckets(userId)
@@ -67,6 +68,7 @@ export class HybridStorage {
     backgroundColor: string
     apy: number
   }, userId?: string): Promise<string | null> {
+    if (typeof window === 'undefined') return null // Skip on server-side
     try {
       // 1. Create in database first (to get proper ID and auto-logging)
       const dbBucket = await bucketService.createBucket({
@@ -300,12 +302,14 @@ export class HybridStorage {
 
   // Get buckets from localStorage (for fast UI updates)
   static getLocalBuckets(userId?: string): { id: string; title: string; currentAmount: number; targetAmount: number; backgroundColor: string; apy: number }[] {
+    if (typeof window === 'undefined') return []
     const saved = localStorage.getItem(this.getBucketsKey(userId))
     return saved ? JSON.parse(saved) : []
   }
 
   // Get main bucket from localStorage
   static getLocalMainBucket(userId?: string): { currentAmount: number } {
+    if (typeof window === 'undefined') return { currentAmount: 1200 }
     const saved = localStorage.getItem(this.getMainBucketKey(userId))
     return saved ? JSON.parse(saved) : { currentAmount: 1200 }
   }

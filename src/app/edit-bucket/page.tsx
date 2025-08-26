@@ -98,9 +98,9 @@ function EditBucketContent() {
       return
     }
     
-    // Handle demo mode
-    const isDemoMode = localStorage.getItem('demo_mode') === 'true'
-    const effectiveUser = user || (isDemoMode ? JSON.parse(localStorage.getItem('demo_user') || '{}') : null)
+    // Handle demo mode (only on client side)
+    const isDemoMode = typeof window !== 'undefined' ? localStorage.getItem('demo_mode') === 'true' : false
+    const effectiveUser = user || (isDemoMode && typeof window !== 'undefined' ? JSON.parse(localStorage.getItem('demo_user') || '{}') : null)
     
     if (!effectiveUser?.id) {
       console.error('❌ User not authenticated')
@@ -128,7 +128,9 @@ function EditBucketContent() {
             targetAmount: parsedAmount,
             backgroundColor: selectedColor
           }
-          localStorage.setItem(`buckets_${effectiveUser.id}`, JSON.stringify(buckets))
+          if (typeof window !== 'undefined') {
+            localStorage.setItem(`buckets_${effectiveUser.id}`, JSON.stringify(buckets))
+          }
           
           console.log('✅ Bucket updated successfully in demo mode:', bucketName)
           

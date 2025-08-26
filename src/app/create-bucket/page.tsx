@@ -95,9 +95,9 @@ function CreateBucketContent() {
       parsedAmount: parseFloat(targetAmount.replace(/,/g, ''))
     })
     
-    // Handle demo mode
-    const isDemoMode = localStorage.getItem('demo_mode') === 'true'
-    const effectiveUser = user || (isDemoMode ? JSON.parse(localStorage.getItem('demo_user') || '{}') : null)
+    // Handle demo mode (only on client side)
+    const isDemoMode = typeof window !== 'undefined' ? localStorage.getItem('demo_mode') === 'true' : false
+    const effectiveUser = user || (isDemoMode && typeof window !== 'undefined' ? JSON.parse(localStorage.getItem('demo_user') || '{}') : null)
     
     if (!effectiveUser?.id) {
       console.error('❌ User not authenticated')
@@ -144,7 +144,9 @@ function CreateBucketContent() {
           updated_at: new Date().toISOString()
         }
         buckets.push(newBucket)
-        localStorage.setItem(`buckets_${effectiveUser.id}`, JSON.stringify(buckets))
+        if (typeof window !== 'undefined') {
+          localStorage.setItem(`buckets_${effectiveUser.id}`, JSON.stringify(buckets))
+        }
         
         console.log('✅ Bucket created successfully in demo mode:', bucketName)
         router.push('/home')
