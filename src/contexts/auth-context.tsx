@@ -38,13 +38,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         console.log('Starting auth initialization...')
         
-        // Check if user just logged in
-        const justLoggedIn = localStorage.getItem('just_logged_in')
-        if (justLoggedIn) {
-          localStorage.removeItem('just_logged_in')
-          console.log('User just logged in, giving auth time to settle...')
-          // Give Supabase time to settle the session
-          await new Promise(resolve => setTimeout(resolve, 500))
+        // Check if user just logged in (only on client side)
+        if (typeof window !== 'undefined') {
+          const justLoggedIn = localStorage.getItem('just_logged_in')
+          if (justLoggedIn) {
+            localStorage.removeItem('just_logged_in')
+            console.log('User just logged in, giving auth time to settle...')
+            // Give Supabase time to settle the session
+            await new Promise(resolve => setTimeout(resolve, 500))
+          }
         }
         
         const initialSession = await authService.getSession()
@@ -108,15 +110,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await authService.signOut()
       console.log('AuthContext: Supabase signOut completed')
       
-      // Clear user-specific localStorage data
-      if (currentUser) {
-        localStorage.removeItem(`buckets_${currentUser.id}`)
-        localStorage.removeItem(`mainBucket_${currentUser.id}`)
+      // Clear user-specific localStorage data (only on client side)
+      if (typeof window !== 'undefined') {
+        if (currentUser) {
+          localStorage.removeItem(`buckets_${currentUser.id}`)
+          localStorage.removeItem(`mainBucket_${currentUser.id}`)
+        }
+        
+        // Clear old global localStorage keys (legacy cleanup)
+        localStorage.removeItem('buckets')
+        localStorage.removeItem('mainBucket')
       }
-      
-      // Clear old global localStorage keys (legacy cleanup)
-      localStorage.removeItem('buckets')
-      localStorage.removeItem('mainBucket')
       
       console.log('AuthContext: Clearing user state...')
       setUser(null)

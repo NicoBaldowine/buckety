@@ -13,9 +13,9 @@ export function ProtectedRoute({ children, redirectTo = '/login' }: ProtectedRou
   const { user, loading } = useAuth()
   const router = useRouter()
   
-  // Check for demo mode
+  // Check for demo mode (only on client side)
   const isDemoMode = typeof window !== 'undefined' && 
-    (window.location.search.includes('demo=true') || localStorage.getItem('demo_mode') === 'true')
+    (window.location?.search?.includes('demo=true') || localStorage?.getItem('demo_mode') === 'true')
 
   useEffect(() => {
     // Skip protection in demo mode
