@@ -11,6 +11,16 @@ import { useState, useEffect, useRef } from "react"
 import { autoDepositService, bucketService, mainBucketService } from "@/lib/supabase"
 import { useAuth } from "@/contexts/auth-context"
 
+interface Bucket {
+  id: string
+  title: string
+  currentAmount: number
+  targetAmount: number
+  backgroundColor: string
+  apy: number
+}
+
+/*
 const defaultBuckets = [
   {
     id: "vacation",
@@ -61,6 +71,7 @@ const defaultBuckets = [
     backgroundColor: "#FFB366"
   }
 ]
+*/
 
 export default function HomePage() {
   return (
@@ -72,17 +83,16 @@ export default function HomePage() {
 
 function HomePageContent() {
   const router = useRouter()
-  const searchParams = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '')
-  const isDemo = searchParams.get('demo') === 'true'
+  // Removed unused searchParams and isDemo variables
   const { user, loading: authLoading } = useAuth()
   const [showStickyHeader, setShowStickyHeader] = useState(false)
   const headerRef = useRef<HTMLDivElement>(null)
-  const [buckets, setBuckets] = useState<typeof defaultBuckets>([])
+  const [buckets, setBuckets] = useState<Bucket[]>([])
   const [totalBalance, setTotalBalance] = useState(0)
   const [mainBucketAmount, setMainBucketAmount] = useState(1200.00)
   const [autoDepositBuckets, setAutoDepositBuckets] = useState<Set<string>>(new Set())
   const [isLoading, setIsLoading] = useState(true)
-  const [hasLoadedFromCache, setHasLoadedFromCache] = useState(false)
+  // const [hasLoadedFromCache, setHasLoadedFromCache] = useState(false) // Unused variables commented out
 
   // Remove complex theme management - using CSS classes instead
 
@@ -110,14 +120,14 @@ function HomePageContent() {
     if (cachedBuckets) {
       try {
         setBuckets(JSON.parse(cachedBuckets))
-      } catch (e) {
+      } catch {
         console.warn('Error parsing cached buckets')
       }
     }
     if (cachedMainBucket) {
       try {
         setMainBucketAmount(JSON.parse(cachedMainBucket).currentAmount)
-      } catch (e) {
+      } catch {
         console.warn('Error parsing cached main bucket')
       }
     }
@@ -131,7 +141,7 @@ function HomePageContent() {
       
       try {
         // Load user's buckets directly from database
-        const userBuckets = await bucketService.getBuckets(user.id)
+        const userBuckets = await bucketService.getBuckets(user?.id || '')
         
         if (userBuckets.length > 0) {
           // Transform database buckets to local format
@@ -162,30 +172,30 @@ function HomePageContent() {
           setAutoDepositBuckets(bucketsWithAutoDeposits)
           
           // Save to localStorage for quick access (user-specific)
-          localStorage.setItem(`buckets_${user.id}`, JSON.stringify(transformedBuckets))
+          localStorage.setItem(`buckets_${user?.id}`, JSON.stringify(transformedBuckets))
         } else {
           // New user - start with empty buckets
           setBuckets([])
-          localStorage.removeItem(`buckets_${user.id}`)
+          localStorage.removeItem(`buckets_${user?.id}`)
         }
 
         // Load user's main bucket
-        const mainBucket = await mainBucketService.getMainBucket(user.id)
+        const mainBucket = await mainBucketService.getMainBucket(user?.id || '')
         if (mainBucket) {
           setMainBucketAmount(mainBucket.current_amount)
-          localStorage.setItem(`mainBucket_${user.id}`, JSON.stringify({ currentAmount: mainBucket.current_amount }))
+          localStorage.setItem(`mainBucket_${user?.id}`, JSON.stringify({ currentAmount: mainBucket.current_amount }))
         } else {
           // Create initial main bucket for new user
-          await mainBucketService.updateMainBucket(user.id, 1200.00)
+          await mainBucketService.updateMainBucket(user?.id || '', 1200.00)
           setMainBucketAmount(1200.00)
-          localStorage.setItem(`mainBucket_${user.id}`, JSON.stringify({ currentAmount: 1200.00 }))
+          localStorage.setItem(`mainBucket_${user?.id}`, JSON.stringify({ currentAmount: 1200.00 }))
         }
         
       } catch (error) {
         console.error('Error loading user data:', error)
         // Fallback to localStorage if database fails
-        const cachedBuckets = localStorage.getItem(`buckets_${user.id}`)
-        const cachedMainBucket = localStorage.getItem(`mainBucket_${user.id}`)
+        const cachedBuckets = localStorage.getItem(`buckets_${user?.id}`)
+        const cachedMainBucket = localStorage.getItem(`mainBucket_${user?.id}`)
         
         if (cachedBuckets) {
           setBuckets(JSON.parse(cachedBuckets))
@@ -232,13 +242,13 @@ function HomePageContent() {
           if (cachedBuckets) {
             try {
               setBuckets(JSON.parse(cachedBuckets))
-            } catch (e) {
+            } catch {
               console.warn('Error parsing cached buckets during refresh')
             }
           }
           
           // Refresh from database when page becomes visible
-          const userBuckets = await bucketService.getBuckets(user.id)
+          const userBuckets = await bucketService.getBuckets(user?.id || '')
           
           if (userBuckets.length > 0) {
             const transformedBuckets = userBuckets.map(bucket => ({
@@ -269,7 +279,7 @@ function HomePageContent() {
           }
           
           // Also refresh main bucket amount
-          const mainBucket = await mainBucketService.getMainBucket(user.id)
+          const mainBucket = await mainBucketService.getMainBucket(user?.id || '')
           if (mainBucket) {
             setMainBucketAmount(mainBucket.current_amount)
           }
@@ -291,7 +301,7 @@ function HomePageContent() {
           const updatedBuckets = e.newValue ? JSON.parse(e.newValue) : []
           setBuckets(updatedBuckets)
           console.log('Buckets updated from storage event:', updatedBuckets.length)
-        } catch (error) {
+        } catch {
           console.warn('Error parsing updated buckets from storage event')
         }
       }
@@ -300,7 +310,7 @@ function HomePageContent() {
           const updatedMainBucket = e.newValue ? JSON.parse(e.newValue) : { currentAmount: 0 }
           setMainBucketAmount(updatedMainBucket.currentAmount)
           console.log('Main bucket updated from storage event:', updatedMainBucket.currentAmount)
-        } catch (error) {
+        } catch {
           console.warn('Error parsing updated main bucket from storage event')
         }
       }
@@ -310,7 +320,7 @@ function HomePageContent() {
     return () => window.removeEventListener('storage', handleStorageChange)
   }, [user])
 
-  const handleBucketClick = (bucket: typeof buckets[0]) => {
+  const handleBucketClick = (bucket: Bucket) => {
     const params = new URLSearchParams({
       id: bucket.id,
       title: bucket.title,
@@ -468,9 +478,8 @@ function HomePageContent() {
             <div className="ml-4">
               <Button 
                 variant="secondary"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  // Handle add balance action
+                onClick={() => {
+                  // Handle add balance action - placeholder
                 }}
                 className="text-[14px] font-medium border border-white/20"
               >

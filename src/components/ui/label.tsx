@@ -1,10 +1,9 @@
 import * as React from "react"
 import { cn } from "@/lib/utils"
 
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
 export interface LabelProps
-  extends React.LabelHTMLAttributes<HTMLLabelElement> {
-  // Additional props can be added here if needed
-}
+  extends React.LabelHTMLAttributes<HTMLLabelElement> {}
 
 const Label = React.forwardRef<HTMLLabelElement, LabelProps>(
   ({ className, ...props }, ref) => {

@@ -97,6 +97,7 @@ export default function TestDatabasePage() {
       const result = await transferService.transferToSavingsBucket(
         bucket.id,
         bucket.current_amount + transferAmount,
+        transferAmount,
         'test-user'
       )
       
@@ -306,7 +307,7 @@ export default function TestDatabasePage() {
           <h3 className="font-semibold text-blue-900 mb-2">📋 Instructions:</h3>
           <ol className="list-decimal list-inside text-blue-800 space-y-1">
             <li>First, run the SQL schema in your Supabase dashboard</li>
-            <li>Click "Test Connection" to verify database setup</li>
+            <li>Click &quot;Test Connection&quot; to verify database setup</li>
             <li>Create a test bucket to verify write operations</li>
             <li>Test money transfers to verify complex operations</li>
             <li>Check activities to verify logging is working</li>

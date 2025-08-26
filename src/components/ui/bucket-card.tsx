@@ -18,7 +18,7 @@ const BucketCard = React.forwardRef<HTMLDivElement, BucketCardProps>(
     title, 
     currentAmount, 
     targetAmount, 
-    apy = 3.5, 
+    // apy = 3.5, // Unused parameter commented out 
     backgroundColor = "#B6F3AD",
     hasAutoDeposit = false,
     ...props 

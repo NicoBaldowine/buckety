@@ -67,7 +67,7 @@ export default function LandingPage() {
         
         <div className="flex items-center gap-4">
           <Button 
-            variant="ghost"
+            variant="secondary"
             onClick={() => router.push('/login')}
             className="text-foreground"
           >

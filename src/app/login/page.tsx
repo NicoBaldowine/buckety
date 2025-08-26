@@ -274,7 +274,7 @@ export default function LoginPage() {
           style={{ animation: 'fadeInUp 0.5s ease-out 0.5s both' }}
         >
           <p className="text-[14px] text-foreground/60">
-            Don't have an account?{' '}
+            Don&apos;t have an account?{' '}
             <button 
               type="button"
               onClick={() => router.push('/sign-up')}

@@ -3,12 +3,11 @@
 import { Button } from "@/components/ui/button"
 import { Select, SelectItem } from "@/components/ui/select"
 import { ProtectedRoute } from "@/components/auth/protected-route"
-import { ArrowLeft, ChevronRight, X } from "lucide-react"
+import { ArrowLeft, X } from "lucide-react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useState, useRef, useEffect } from "react"
 import { HybridStorage } from "@/lib/hybrid-storage"
 import { useAuth } from "@/contexts/auth-context"
-import { autoDepositService } from "@/lib/supabase"
 
 interface Account {
   id: string
@@ -142,7 +141,7 @@ function EditAutoDepositContent() {
                 setCustomDate(deposit.end_date.split('T')[0])
               }
             }
-          } catch (e) {
+          } catch {
             console.warn('Error parsing auto deposit settings')
             // Fallback to defaults
             setAmount("10.00")

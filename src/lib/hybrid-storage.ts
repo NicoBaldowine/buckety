@@ -1,4 +1,4 @@
-import { bucketService, activityService, mainBucketService, transferService, type Bucket, type Activity } from './supabase'
+import { bucketService, activityService, mainBucketService, transferService, type Activity } from './supabase'
 
 // Hybrid storage service that combines localStorage for speed + database for persistence
 export class HybridStorage {
@@ -243,7 +243,7 @@ export class HybridStorage {
       if (cachedActivities) {
         try {
           activities = JSON.parse(cachedActivities)
-        } catch (e) {
+        } catch {
           console.warn('Error parsing cached activities')
         }
       }
@@ -257,7 +257,7 @@ export class HybridStorage {
             const transferHistory = localStorage.getItem('main_bucket_transfers') || '[]'
             try {
               freshActivities = JSON.parse(transferHistory)
-            } catch (e) {
+            } catch {
               freshActivities = []
             }
             

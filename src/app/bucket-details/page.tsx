@@ -85,7 +85,7 @@ function BucketDetailsContent() {
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
   const [showConfetti, setShowConfetti] = useState(false)
-  const [bucketJustCompleted, setBucketJustCompleted] = useState(false)
+  // const [bucketJustCompleted, setBucketJustCompleted] = useState(false) // Unused variable commented out
 
   const handleDeleteBucket = async () => {
     const bucketId = searchParams.get('id')
@@ -253,7 +253,7 @@ function BucketDetailsContent() {
               const cached = JSON.parse(cachedActivities)
               setActivities(cached)
               setLoadingActivities(false) // Show cached data immediately
-            } catch (e) {
+            } catch {
               console.warn('Error parsing cached activities')
             }
           }
@@ -337,7 +337,7 @@ function BucketDetailsContent() {
       
       if (isNowComplete && bucketData.id !== 'main-bucket') {
         console.log('🎉 Bucket just completed! Showing confetti')
-        setBucketJustCompleted(true)
+        // setBucketJustCompleted(true) // Commented out since variable is unused
         setShowConfetti(true)
         
         // Stop confetti after 4 seconds

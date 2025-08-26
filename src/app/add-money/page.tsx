@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button"
 import { Modal } from "@/components/ui/modal"
 import { Select, SelectItem } from "@/components/ui/select"
 import { ProtectedRoute } from "@/components/auth/protected-route"
-import { ArrowLeft, Repeat, ChevronRight, ChevronDown, X } from "lucide-react"
+import { ArrowLeft, Repeat, ChevronRight, X } from "lucide-react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useState, useRef, useEffect } from "react"
 import { HybridStorage } from "@/lib/hybrid-storage"
@@ -351,19 +351,6 @@ function AddMoneyContent() {
     }
   }
 
-  const frequencyOptions = {
-    daily: 'Daily',
-    weekly: 'Weekly',
-    monthly: 'Monthly'
-  }
-
-  const endDateOptions = {
-    '1_month': '1 month',
-    '3_months': '3 months',
-    '6_months': '6 months',
-    '1_year': '1 year',
-    'never': 'Never'
-  }
 
   return (
     <div className="min-h-screen bg-background transition-all duration-500 ease-out">

@@ -37,7 +37,7 @@ export interface ButtonProps
 }
 
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, asChild = false, icon, iconPosition = "left", initial, children, ...props }, ref) => {
+  ({ className, variant, size, /* asChild = false, */ icon, iconPosition = "left", initial, children, ...props }, ref) => {
     const isIconOnly = variant === "secondary-icon"
     const isAvatar = variant === "avatar"
     

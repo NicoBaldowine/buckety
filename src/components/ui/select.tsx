@@ -32,13 +32,13 @@ export function Select({
     if (!value) return placeholder
     
     const selectedOption = React.Children.toArray(children).find((child) => {
-      if (React.isValidElement(child) && child.props.value === value) {
+      if (React.isValidElement<SelectItemProps>(child) && child.props.value === value) {
         return true
       }
       return false
     })
     
-    if (React.isValidElement(selectedOption)) {
+    if (React.isValidElement<SelectItemProps>(selectedOption)) {
       return selectedOption.props.children
     }
     
@@ -117,7 +117,7 @@ export function Select({
           }}
         >
           {React.Children.map(children, (child) => {
-            if (React.isValidElement(child)) {
+            if (React.isValidElement<SelectItemProps>(child)) {
               return React.cloneElement(child as React.ReactElement<SelectItemProps>, {
                 onClick: () => handleSelect(child.props.value),
                 isSelected: child.props.value === value
@@ -141,7 +141,7 @@ export interface SelectItemProps {
 }
 
 export function SelectItem({ 
-  value, 
+  /* value, */ // Unused parameter commented out
   children, 
   onClick, 
   isSelected = false, 
