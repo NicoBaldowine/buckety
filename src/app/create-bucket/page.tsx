@@ -149,7 +149,17 @@ function CreateBucketContent() {
         }
         
         console.log('✅ Bucket created successfully in demo mode:', bucketName)
-        router.push('/home')
+        // Navigate to bucket details
+        const params = new URLSearchParams({
+          id: newBucket.id,
+          title: newBucket.title,
+          currentAmount: newBucket.currentAmount.toString(),
+          targetAmount: newBucket.targetAmount.toString(),
+          backgroundColor: newBucket.backgroundColor,
+          apy: newBucket.apy.toString(),
+          fromCreate: 'true'
+        })
+        router.push(`/bucket-details?${params.toString()}`)
       } else {
         const bucketId = await HybridStorage.createBucket({
           title: bucketName,
@@ -160,8 +170,24 @@ function CreateBucketContent() {
         
         if (bucketId) {
           console.log('✅ Bucket created successfully:', bucketName, 'with ID:', bucketId)
-          // Navigate to home to see the new bucket
-          router.push('/home')
+          // Get the created bucket to navigate to details
+          const buckets = HybridStorage.getLocalBuckets(effectiveUser.id)
+          const createdBucket = buckets.find(b => b.id === bucketId)
+          
+          if (createdBucket) {
+            const params = new URLSearchParams({
+              id: createdBucket.id,
+              title: createdBucket.title,
+              currentAmount: createdBucket.currentAmount.toString(),
+              targetAmount: createdBucket.targetAmount.toString(),
+              backgroundColor: createdBucket.backgroundColor,
+              apy: createdBucket.apy.toString(),
+              fromCreate: 'true'
+            })
+            router.push(`/bucket-details?${params.toString()}`)
+          } else {
+            router.push('/home')
+          }
         } else {
           console.error('❌ Failed to create bucket - no ID returned')
           alert('Failed to create bucket. Please try again.')

@@ -386,6 +386,8 @@ function BucketDetailsContent() {
         const params = new URLSearchParams(searchParams?.toString() || '')
         params.delete('fromTransfer')
         params.delete('transferAmount')
+        params.delete('fromCreate')
+        params.delete('fromAutoDeposit')
         window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}`)
       }, 100)
     }
@@ -493,10 +495,13 @@ function BucketDetailsContent() {
             variant="secondary-icon" 
             icon={<ArrowLeft />} 
             onClick={() => {
-              // If coming from a transfer or auto deposit setup, go to home instead of back
+              // Always go to home when coming from create, transfer, or auto deposit
               const fromTransfer = searchParams.get('fromTransfer')
               const fromAutoDeposit = searchParams.get('fromAutoDeposit')
-              if (fromTransfer === 'true' || fromAutoDeposit === 'true') {
+              const fromCreate = searchParams.get('fromCreate')
+              
+              // Always go home after these specific actions
+              if (fromTransfer === 'true' || fromAutoDeposit === 'true' || fromCreate === 'true') {
                 router.push('/home')
               } else {
                 router.back()
