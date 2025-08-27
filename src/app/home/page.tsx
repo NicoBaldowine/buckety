@@ -422,7 +422,7 @@ function HomePageContent() {
               </div>
             </div>
             <p 
-              className="text-[40px] font-semibold text-foreground"
+              className="text-[40px] max-sm:text-[32px] font-semibold text-foreground"
               style={{ letterSpacing: '-0.03em', marginBottom: '-6px' }}
             >
               ${totalBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -467,7 +467,7 @@ function HomePageContent() {
               {/* Amount section - single amount only */}
               <div>
                 <div className="flex items-baseline gap-1">
-                  <span className="text-[32px] font-semibold tracking-tight text-foreground">
+                  <span className="text-[32px] max-sm:text-[24px] font-semibold tracking-tight text-foreground">
                     ${mainBucketAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </span>
                 </div>
