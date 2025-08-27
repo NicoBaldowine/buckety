@@ -9,7 +9,7 @@ import { ConfirmationModal } from "@/components/ui/modal"
 import { ArrowLeft, MoreVertical, Edit, Trash2, Plus, ArrowUpFromLine, Repeat, Download } from "lucide-react"
 import ConfettiExplosion from 'react-confetti-explosion'
 import { useRouter, useSearchParams } from "next/navigation"
-import { Suspense, useState, useEffect } from "react"
+import { Suspense, useState, useEffect, useRef } from "react"
 import { HybridStorage } from "@/lib/hybrid-storage"
 import { type Activity, type AutoDeposit, autoDepositService } from "@/lib/supabase"
 import { AutoDepositBanner } from "@/components/ui/auto-deposit-banner"
@@ -86,6 +86,8 @@ function BucketDetailsContent() {
   const [isDeleting, setIsDeleting] = useState(false)
   const [showConfetti, setShowConfetti] = useState(false)
   // const [bucketJustCompleted, setBucketJustCompleted] = useState(false) // Unused variable commented out
+  const [showStickyHeader, setShowStickyHeader] = useState(false)
+  const headerRef = useRef<HTMLDivElement>(null)
 
   const handleDeleteBucket = async () => {
     const bucketId = searchParams.get('id')
@@ -324,6 +326,19 @@ function BucketDetailsContent() {
   // Use actual current amount if available, otherwise fall back to URL parameter
   const displayCurrentAmount = actualCurrentAmount !== null ? actualCurrentAmount : bucketData.currentAmount
   const finalProgress = Math.min((displayCurrentAmount / bucketData.targetAmount) * 100, 100)
+  
+  // Handle sticky header
+  useEffect(() => {
+    const handleScroll = () => {
+      if (headerRef.current) {
+        const headerBottom = headerRef.current.getBoundingClientRect().bottom
+        setShowStickyHeader(headerBottom < 0)
+      }
+    }
+
+    window.addEventListener('scroll', handleScroll)
+    return () => window.removeEventListener('scroll', handleScroll)
+  }, [])
 
   // Check for transfer and bucket completion
   useEffect(() => {
@@ -418,9 +433,59 @@ function BucketDetailsContent() {
         backgroundColor: bucketData.backgroundColor
       }}
     >
+      {/* Sticky header */}
+      <div 
+        className={`fixed top-0 left-0 right-0 z-50 border-b border-black/10 transition-all duration-300 ${
+          showStickyHeader ? 'translate-y-0 opacity-100' : '-translate-y-full opacity-0'
+        }`}
+        style={{ backgroundColor: bucketData.backgroundColor }}
+      >
+        <div className="max-w-[660px] mx-auto px-12 py-4 max-sm:px-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Button variant="secondary" onClick={() => router.push(`/add-money?to=${bucketData.id}`)}>
+                Add money
+              </Button>
+              {bucketData.targetAmount > 0 && displayCurrentAmount < bucketData.targetAmount && (
+                <Button 
+                  variant="primary"
+                  onClick={() => router.push(`/add-money?to=${bucketData.id}&showAutoDeposit=true`)}
+                >
+                  Auto deposit
+                </Button>
+              )}
+            </div>
+            <DropdownMenu 
+              trigger={<Button variant="secondary-icon" icon={<MoreVertical />} />}
+            >
+              {bucketData.id !== 'main-bucket' && (
+                <DropdownMenuItem onClick={() => {
+                  const params = new URLSearchParams(searchParams?.toString() || '')
+                  router.push(`/edit-bucket?${params.toString()}`)
+                }}>
+                  <Edit className="h-4 w-4" />
+                  Edit bucket
+                </DropdownMenuItem>
+              )}
+              <DropdownMenuItem>
+                <ArrowUpFromLine className="h-4 w-4" />
+                Withdraw money
+              </DropdownMenuItem>
+              {bucketData.id !== 'main-bucket' && (
+                <DropdownMenuItem onClick={() => setShowDeleteModal(true)}>
+                  <Trash2 className="h-4 w-4" />
+                  Delete bucket
+                </DropdownMenuItem>
+              )}
+            </DropdownMenu>
+          </div>
+        </div>
+      </div>
+
       <div className="max-w-[660px] mx-auto px-12 py-6 max-sm:px-4 max-sm:py-3">
         {/* Header with navigation and actions */}
         <div 
+          ref={headerRef}
           className="flex items-center justify-between mb-15"
           style={{ animation: 'slideInFromTop 0.4s ease-out 0.1s both' }}
         >
@@ -530,7 +595,7 @@ function BucketDetailsContent() {
           )}
           
           <h1 
-            className="text-[40px] font-semibold text-black"
+            className="text-[40px] max-sm:text-[20px] font-semibold text-black"
             style={{ letterSpacing: '-0.03em' }}
           >
             {bucketData.title}
@@ -540,14 +605,14 @@ function BucketDetailsContent() {
           <div className="flex items-baseline mt-2">
             <div className="flex items-baseline gap-1">
               <span 
-                className="text-[32px] font-semibold text-black"
+                className="text-[32px] max-sm:text-[24px] font-semibold text-black"
                 style={{ letterSpacing: '-0.05em' }}
               >
                 ${animatedCurrentAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </span>
               {bucketData.id !== 'main-bucket' && (
                 <span 
-                  className="text-[32px] font-semibold text-black/40"
+                  className="text-[32px] max-sm:text-[24px] font-semibold text-black/40"
                   style={{ letterSpacing: '-0.05em' }}
                 >
                   of ${bucketData.targetAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
