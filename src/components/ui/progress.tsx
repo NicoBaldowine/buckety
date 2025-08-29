@@ -39,27 +39,23 @@ const Progress = React.forwardRef<HTMLDivElement, ProgressProps>(
               <rect width="1" height="8" fill="#000000" />
             </pattern>
             
-            {/* Clip path for progress bar to ensure stripes stay within rounded corners */}
+            {/* Clip path for progress bar to ensure stripes stay within square corners */}
             <clipPath id={`progress-clip-${uniqueId}`}>
               <rect
                 x="1"
                 y="1"
                 width={`calc(${percentage}% - 2px)`}
                 height="38"
-                rx="12"
-                ry="12"
               />
             </clipPath>
           </defs>
           
-          {/* Background pill */}
+          {/* Background rectangle */}
           <rect
             x="1"
             y="1"
             width="calc(100% - 2px)"
             height="38"
-            rx="12"
-            ry="12"
             fill="#000000"
             fillOpacity="0.1"
           />
@@ -93,8 +89,6 @@ const Progress = React.forwardRef<HTMLDivElement, ProgressProps>(
             y="1"
             width="calc(100% - 2px)"
             height="38"
-            rx="12"
-            ry="12"
             fill="none"
             stroke="#000000"
             strokeWidth="1"

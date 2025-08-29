@@ -130,7 +130,13 @@ export const bucketService = {
       const { data, error } = await query.order('created_at', { ascending: false })
       
       if (error) {
-        console.error('Error fetching buckets:', error)
+        console.error('Error fetching buckets:', {
+          message: error.message || 'Unknown error',
+          code: error.code,
+          details: error.details,
+          hint: error.hint
+        })
+        // Return empty array to fallback to localStorage
         return []
       }
       
@@ -182,6 +188,8 @@ export const bucketService = {
 
   // Update a bucket
   async updateBucket(id: string, updates: Partial<Bucket>): Promise<Bucket | null> {
+    console.log('Attempting to update bucket:', { id, updates })
+    
     const { data, error } = await supabase
       .from('buckets')
       .update({ ...updates, updated_at: new Date().toISOString() })
@@ -190,10 +198,21 @@ export const bucketService = {
       .single()
     
     if (error) {
-      console.error('Error updating bucket:', error)
+      console.error('Error updating bucket:', {
+        error,
+        errorDetails: {
+          message: error.message,
+          code: error.code,
+          details: error.details,
+          hint: error.hint
+        },
+        bucketId: id,
+        updates
+      })
       return null
     }
     
+    console.log('Bucket updated successfully:', data)
     return data
   },
 

@@ -1,0 +1,112 @@
+      {/* Sticky header - matches original header exactly */}
+      <div 
+        className={`fixed top-0 left-0 right-0 z-50 border-b border-black/10 transition-all duration-300 ${
+          showStickyHeader ? 'translate-y-0 opacity-100' : '-translate-y-full opacity-0'
+        }`}
+        style={{ backgroundColor: bucketData.backgroundColor }}
+      >
+        <div className="max-w-[660px] mx-auto px-12 py-4 max-sm:px-4">
+          <div className="flex items-center justify-between">
+            <Button 
+              variant="secondary-icon" 
+              icon={<ArrowLeft />} 
+              onClick={() => {
+                const fromTransfer = searchParams.get('fromTransfer')
+                const fromAutoDeposit = searchParams.get('fromAutoDeposit')
+                const fromCreate = searchParams.get('fromCreate')
+                
+                let navigationContext = ''
+                if (typeof window !== 'undefined') {
+                  navigationContext = sessionStorage.getItem('navigation_context') || ''
+                }
+                
+                const shouldGoHome = fromTransfer === 'true' || 
+                                   fromAutoDeposit === 'true' || 
+                                   fromCreate === 'true' ||
+                                   navigationContext === 'fromTransfer' ||
+                                   navigationContext === 'fromAutoDeposit' ||
+                                   navigationContext === 'fromCreate'
+                
+                if (shouldGoHome) {
+                  if (typeof window !== 'undefined') {
+                    sessionStorage.removeItem('navigation_context')
+                  }
+                  router.push('/home')
+                } else {
+                  router.back()
+                }
+              }}
+              className="!bg-black/10 !text-black"
+            />
+            <div className="flex items-center gap-3">
+              <DropdownMenu
+                trigger={
+                  <Button 
+                    variant="secondary-icon" 
+                    icon={<MoreVertical />}
+                    className="!bg-black/10 !text-black"
+                  />
+                }
+              >
+                {bucketData.id !== 'main-bucket' && (
+                  <DropdownMenuItem onClick={() => {
+                    const params = new URLSearchParams(searchParams?.toString() || '')
+                    router.push(`/edit-bucket?${params.toString()}`)
+                  }}>
+                    <Edit className="h-4 w-4" />
+                    Edit bucket
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuItem>
+                  <ArrowUpFromLine className="h-4 w-4" />
+                  Withdraw money
+                </DropdownMenuItem>
+                {/* Only show auto deposit option if bucket is not completed */}
+                {!(displayCurrentAmount >= bucketData.targetAmount) && (
+                  <>
+                    {autoDeposits.length > 0 ? (
+                      <DropdownMenuItem onClick={() => {
+                        router.push(`/edit-auto-deposit?bucket=${bucketData.id}`)
+                      }}>
+                        <Repeat className="h-4 w-4" />
+                        Edit auto deposit
+                      </DropdownMenuItem>
+                    ) : (
+                      <DropdownMenuItem onClick={() => {
+                        router.push(`/add-money?to=${bucketData.id}&showAutoDeposit=true`)
+                      }}>
+                        <Repeat className="h-4 w-4" />
+                        Auto deposit
+                      </DropdownMenuItem>
+                    )}
+                  </>
+                )}
+                {bucketData.id !== 'main-bucket' && (
+                  <DropdownMenuItem onClick={() => setShowDeleteModal(true)}>
+                    <Trash2 className="h-4 w-4" />
+                    Delete bucket
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenu>
+              <Button 
+                variant="primary" 
+                icon={bucketData.id !== 'main-bucket' && displayCurrentAmount >= bucketData.targetAmount ? <Download /> : <Plus />} 
+                iconPosition="left"
+                className="!bg-black !text-white"
+                onClick={() => {
+                  if (bucketData.id !== 'main-bucket' && displayCurrentAmount >= bucketData.targetAmount) {
+                    alert('Withdraw functionality coming soon!')
+                  } else {
+                    router.push(`/add-money?to=${bucketData.id}`)
+                  }
+                }}
+              >
+                {bucketData.id === 'main-bucket' 
+                  ? 'Add funds' 
+                  : (displayCurrentAmount >= bucketData.targetAmount ? 'Withdraw' : 'Add money')
+                }
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>

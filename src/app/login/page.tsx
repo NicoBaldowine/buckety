@@ -15,41 +15,35 @@ export default function LoginPage() {
   const [password, setPassword] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState("")
-  const [checkingAuth, setCheckingAuth] = useState(false) // Changed to false to skip the check
+  const [checkingAuth, setCheckingAuth] = useState(true)
   const [showPassword, setShowPassword] = useState(false)
   
-  // Check if user is already logged in
+  // Check if user is already logged in and listen for auth changes
   useEffect(() => {
-    let timeoutId: NodeJS.Timeout
+    let mounted = true
     
     const checkSession = async () => {
       try {
-        // Set a timeout to prevent infinite loading
-        timeoutId = setTimeout(() => {
-          console.log('Session check timed out, proceeding to login')
-          setCheckingAuth(false)
-        }, 3000) // 3 second timeout
-        
         const session = await authService.getSession()
-        clearTimeout(timeoutId)
-        
-        if (session) {
+        if (session && mounted) {
           console.log('User already logged in, redirecting to home...')
           router.push('/home')
-        } else {
-          setCheckingAuth(false)
+          return
         }
       } catch (error) {
         console.error('Error checking session:', error)
-        clearTimeout(timeoutId)
-        setCheckingAuth(false)
+      } finally {
+        if (mounted) {
+          setCheckingAuth(false)
+        }
       }
     }
     
     checkSession()
     
+    // Cleanup
     return () => {
-      if (timeoutId) clearTimeout(timeoutId)
+      mounted = false
     }
   }, [router])
 
@@ -65,14 +59,10 @@ export default function LoginPage() {
       const result = await authService.signIn(email, password)
       console.log('Sign in result:', result)
       
-      if (result.success) {
-        console.log('Sign in successful, redirecting to home...')
-        // Set a flag to prevent redirect loop (only on client side)
-        if (typeof window !== 'undefined') {
-          localStorage.setItem('just_logged_in', 'true')
-          // Force a hard navigation to ensure auth state updates
-          window.location.href = '/home'
-        }
+      if (result.success && result.session) {
+        console.log('Sign in successful, redirecting...')
+        // Navigate to home
+        window.location.href = '/home'
       } else {
         console.error('Sign in failed:', result.error)
         setError(result.error || "Failed to sign in")
@@ -120,7 +110,7 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen bg-background transition-all duration-500 ease-out">
-      <div className="max-w-[520px] mx-auto px-12 py-6 min-h-screen flex items-center">
+      <div className="max-w-[520px] mx-auto px-12 py-6 max-sm:px-4 max-sm:py-3 min-h-screen flex items-center">
         <div className="w-full">
           {/* Logo */}
           <div className="flex justify-center mb-10">
@@ -146,7 +136,7 @@ export default function LoginPage() {
             style={{ animation: 'fadeInUp 0.5s ease-out 0.1s both' }}
           >
             <h1 
-              className="text-[40px] font-semibold text-foreground"
+              className="text-[32px] font-semibold text-foreground"
               style={{ letterSpacing: '-0.03em' }}
             >
               Welcome back

@@ -43,7 +43,7 @@ const BucketCard = React.forwardRef<HTMLDivElement, BucketCardProps>(
       <div
         ref={ref}
         className={cn(
-          "p-8 rounded-[32px] cursor-pointer transition-all duration-300 ease-out relative",
+          "p-8 rounded-[24px] cursor-pointer transition-all duration-300 ease-out relative",
           className
         )}
         style={{ 
@@ -85,10 +85,10 @@ const BucketCard = React.forwardRef<HTMLDivElement, BucketCardProps>(
         {/* Amount section */}
         <div className="mb-6">
           <div className="flex items-baseline gap-1">
-            <span className="text-[32px] max-sm:text-[24px] font-semibold tracking-tight text-black">
+            <span className="text-[24px] font-semibold tracking-tight text-black">
               ${currentAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </span>
-            <span className="text-[32px] max-sm:text-[24px] font-semibold tracking-tight text-black/40">
+            <span className="text-[24px] font-semibold tracking-tight text-black/40">
               of ${targetAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </span>
           </div>

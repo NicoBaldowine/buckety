@@ -230,11 +230,26 @@ function AddMoneyContent() {
             backgroundColor: bucket.backgroundColor || '#ffffff',
             apy: (bucket.apy || 0).toString(),
             fromTransfer: 'true',
-            transferAmount: transferAmount.toString()
+            transferAmount: transferAmount.toString(),
+            fromSource: fromAccount.title || 'Main Bucket'
           })
+          console.log('💰 Navigating to bucket details after transfer with params:', Object.fromEntries(params.entries()))
+          
+          // Also set navigation context in sessionStorage as backup
+          if (typeof window !== 'undefined') {
+            sessionStorage.setItem('navigation_context', 'fromTransfer')
+          }
+          
           router.push(`/bucket-details?${params.toString()}`)
         }
       } else {
+        console.log('🏠 Transfer to main bucket, going to home')
+        
+        // Clear navigation context
+        if (typeof window !== 'undefined') {
+          sessionStorage.removeItem('navigation_context')
+        }
+        
         router.push('/home')
       }
     } catch (error) {
@@ -338,6 +353,12 @@ function AddMoneyContent() {
           apy: (bucket.apy || 0).toString(),
           fromAutoDeposit: 'true'
         })
+        
+        // Also set navigation context in sessionStorage as backup
+        if (typeof window !== 'undefined') {
+          sessionStorage.setItem('navigation_context', 'fromAutoDeposit')
+        }
+        
         router.push(`/bucket-details?${params.toString()}`)
       } else {
         console.error('Bucket not found in localStorage')

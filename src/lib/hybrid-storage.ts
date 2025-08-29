@@ -255,22 +255,43 @@ export class HybridStorage {
         try {
           let freshActivities: Activity[]
           if (bucketId === 'main-bucket') {
-            // For main bucket, get transfer history from localStorage
+            // For main bucket, prioritize database data over localStorage
+            let localActivities: Activity[] = []
             const transferHistory = localStorage.getItem('main_bucket_transfers') || '[]'
             try {
-              freshActivities = JSON.parse(transferHistory)
+              localActivities = JSON.parse(transferHistory)
             } catch {
-              freshActivities = []
+              localActivities = []
             }
             
-            // Also try to get from database if available
+            // Try to get from database first with timeout
             try {
-              const dbActivities = await activityService.getMainBucketTransferActivities(userId || this.USER_ID)
-              if (dbActivities && dbActivities.length > 0) {
-                freshActivities = dbActivities
+              console.log('Loading main bucket activities from database...')
+              const dbPromise = activityService.getMainBucketTransferActivities(userId || this.USER_ID)
+              const timeoutPromise = new Promise<Activity[]>((resolve) => {
+                setTimeout(() => {
+                  console.warn('Database query timed out, using localStorage data')
+                  resolve(localActivities)
+                }, 3000) // 3 second timeout
+              })
+              
+              freshActivities = await Promise.race([dbPromise, timeoutPromise])
+              
+              // If database returned empty but localStorage has data, use localStorage
+              if ((!freshActivities || freshActivities.length === 0) && localActivities.length > 0) {
+                console.log('Database returned empty, using localStorage activities:', localActivities.length)
+                freshActivities = localActivities
+              } else if (freshActivities && freshActivities.length > 0) {
+                console.log('Using database activities:', freshActivities.length)
               }
             } catch (dbError) {
-              console.warn('Could not load main bucket activities from database:', dbError)
+              console.warn('Database error, using localStorage activities:', dbError)
+              freshActivities = localActivities
+            }
+            
+            // Ensure we have a fallback
+            if (!freshActivities) {
+              freshActivities = localActivities
             }
           } else {
             freshActivities = await activityService.getActivities(bucketId)
@@ -285,14 +306,20 @@ export class HybridStorage {
         }
       }
       
-      // If we have cached data, return it immediately and update in background
-      if (activities.length > 0) {
-        // Update cache in background
-        loadFreshData()
-        return activities
-      } else {
-        // No cached data, wait for fresh data
+      // Always try to get fresh data for main bucket to ensure completeness
+      if (bucketId === 'main-bucket') {
+        console.log('Loading fresh data for main bucket (always fresh load)')
         return await loadFreshData()
+      } else {
+        // For other buckets, use cached data if available
+        if (activities.length > 0) {
+          // Update cache in background
+          loadFreshData()
+          return activities
+        } else {
+          // No cached data, wait for fresh data
+          return await loadFreshData()
+        }
       }
     } catch (error) {
       console.error('❌ Error loading activities:', error)

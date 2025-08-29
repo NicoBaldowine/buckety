@@ -76,7 +76,11 @@ function CreateBucketContent() {
     { color: "#FF97D0", name: "Pink" },
     { color: "#FF9FF3", name: "Light Pink" },
     { color: "#FF9999", name: "Light Red" },
-    { color: "#FF6B6B", name: "Red" }
+    { color: "#FF6B6B", name: "Red" },
+    // Grays & Neutrals
+    { color: "#E5E7EB", name: "Light Gray" },
+    { color: "#9CA3AF", name: "Medium Gray" },
+    { color: "#4B5563", name: "Dark Gray" }
   ]
 
   const getSelectedColorName = () => {
@@ -184,6 +188,18 @@ function CreateBucketContent() {
               apy: createdBucket.apy.toString(),
               fromCreate: 'true'
             })
+            
+            // Also set navigation context in sessionStorage as backup
+            if (typeof window !== 'undefined') {
+              sessionStorage.setItem('navigation_context', 'fromCreate')
+            }
+            
+            
+            // Also set navigation context in sessionStorage as backup
+            if (typeof window !== 'undefined') {
+              sessionStorage.setItem('navigation_context', 'fromCreate')
+            }
+            
             router.push(`/bucket-details?${params.toString()}`)
           } else {
             router.push('/home')
@@ -220,7 +236,7 @@ function CreateBucketContent() {
           style={{ animation: 'fadeInUp 0.5s ease-out 0.2s both' }}
         >
           <h1 
-            className="text-[40px] font-semibold text-foreground"
+            className="text-[32px] font-semibold text-foreground"
             style={{ letterSpacing: '-0.03em' }}
           >
             Create new bucket

@@ -5,7 +5,8 @@ import { BucketCard } from "@/components/ui/bucket-card"
 import { AvatarDropdown } from "@/components/ui/avatar-dropdown"
 import { ProtectedRoute } from "@/components/auth/protected-route"
 import { HeaderSkeleton, BalanceSkeleton, MainBucketSkeleton, BucketCardSkeleton } from "@/components/ui/skeleton-loader"
-import { Info } from "lucide-react"
+import { TabBar } from "@/components/ui/tab-bar"
+import { Info, ChevronRight } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useState, useEffect, useRef } from "react"
 import { autoDepositService, bucketService, mainBucketService } from "@/lib/supabase"
@@ -156,9 +157,23 @@ function HomePageContent() {
           
           setBuckets(transformedBuckets)
           
-          // Check for auto deposits for each bucket
+          // Check for auto deposits for each bucket (localStorage first, then database)
           const autoDepositChecks = await Promise.all(
             userBuckets.map(async (bucket) => {
+              // First check localStorage
+              const autoDepositsKey = `auto_deposits_${bucket.id}`
+              const localAutoDeposits = localStorage.getItem(autoDepositsKey)
+              
+              if (localAutoDeposits) {
+                try {
+                  const deposits = JSON.parse(localAutoDeposits)
+                  return { bucketId: bucket.id, hasAutoDeposit: Array.isArray(deposits) && deposits.length > 0 }
+                } catch {
+                  // If parse fails, check database
+                }
+              }
+              
+              // If no localStorage or parse failed, check database
               const autoDeposits = await autoDepositService.getBucketAutoDeposits(bucket.id)
               return { bucketId: bucket.id, hasAutoDeposit: autoDeposits.length > 0 }
             })
@@ -208,14 +223,22 @@ function HomePageContent() {
       }
     }
     
-    // Set a maximum loading time of 3 seconds
-    const loadingTimeout = setTimeout(() => {
+    // Only load fresh data from database if we have a real authenticated user
+    if (effectiveUser && !demoMode) {
+      // Defer data loading slightly to ensure auth is fully settled
+      setTimeout(() => {
+        // Set a maximum loading time of 3 seconds
+        const loadingTimeout = setTimeout(() => {
+          setIsLoading(false)
+        }, 3000)
+        
+        initializeData().finally(() => {
+          clearTimeout(loadingTimeout)
+        })
+      }, 100)
+    } else if (demoMode) {
       setIsLoading(false)
-    }, 3000)
-    
-    initializeData().finally(() => {
-      clearTimeout(loadingTimeout)
-    })
+    }
   }, [user, authLoading])
 
   // Save buckets to localStorage whenever buckets change (user-specific)
@@ -262,9 +285,23 @@ function HomePageContent() {
             
             setBuckets(transformedBuckets)
             
-            // Also refresh auto deposit status
+            // Also refresh auto deposit status (localStorage first, then database)
             const autoDepositChecks = await Promise.all(
               userBuckets.map(async (bucket) => {
+                // First check localStorage
+                const autoDepositsKey = `auto_deposits_${bucket.id}`
+                const localAutoDeposits = localStorage.getItem(autoDepositsKey)
+                
+                if (localAutoDeposits) {
+                  try {
+                    const deposits = JSON.parse(localAutoDeposits)
+                    return { bucketId: bucket.id, hasAutoDeposit: Array.isArray(deposits) && deposits.length > 0 }
+                  } catch {
+                    // If parse fails, check database
+                  }
+                }
+                
+                // If no localStorage or parse failed, check database
                 const autoDeposits = await autoDepositService.getBucketAutoDeposits(bucket.id)
                 return { bucketId: bucket.id, hasAutoDeposit: autoDeposits.length > 0 }
               })
@@ -290,8 +327,41 @@ function HomePageContent() {
     }
     
     document.addEventListener('visibilitychange', handleVisibilityChange)
-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
-  }, [user])
+    
+    // Also check auto deposits periodically to catch cancellations
+    const interval = setInterval(async () => {
+      if (buckets.length > 0) {
+        const autoDepositChecks = await Promise.all(
+          buckets.map(async (bucket) => {
+            const autoDepositsKey = `auto_deposits_${bucket.id}`
+            const localAutoDeposits = localStorage.getItem(autoDepositsKey)
+            
+            if (localAutoDeposits) {
+              try {
+                const deposits = JSON.parse(localAutoDeposits)
+                return { bucketId: bucket.id, hasAutoDeposit: Array.isArray(deposits) && deposits.length > 0 }
+              } catch {
+                return { bucketId: bucket.id, hasAutoDeposit: false }
+              }
+            }
+            return { bucketId: bucket.id, hasAutoDeposit: false }
+          })
+        )
+        
+        const bucketsWithAutoDeposits = new Set(
+          autoDepositChecks
+            .filter(check => check.hasAutoDeposit)
+            .map(check => check.bucketId)
+        )
+        setAutoDepositBuckets(bucketsWithAutoDeposits)
+      }
+    }, 1000) // Check every second
+    
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      clearInterval(interval)
+    }
+  }, [user, buckets])
 
   // Listen for localStorage changes (e.g., when buckets are deleted)
   useEffect(() => {
@@ -415,31 +485,33 @@ function HomePageContent() {
                 <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 bg-black text-white text-sm px-3 py-2 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-10">
                   <div className="text-center">
                     <div>Sum of all buckets earning</div>
-                    <div className="font-semibold">7.5% APY interest</div>
+                    <div className="font-semibold">6% APY interest</div>
                   </div>
                   <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-black"></div>
                 </div>
               </div>
             </div>
             <p 
-              className="text-[40px] max-sm:text-[32px] font-semibold text-foreground"
+              className="text-[32px] font-semibold text-foreground"
               style={{ letterSpacing: '-0.03em', marginBottom: '-6px' }}
             >
               ${totalBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </p>
             <button 
-              className="text-[16px] font-semibold hover:opacity-80 transition-opacity cursor-pointer"
+              onClick={() => router.push('/earnings')}
+              className="text-[16px] font-semibold hover:opacity-80 transition-opacity cursor-pointer flex items-center gap-1"
               style={{ letterSpacing: '-0.03em' }}
             >
-              <span style={{ color: '#19B802' }}>+7.5%</span>
-              <span className="text-foreground ml-1">(${(totalBalance * 0.075).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})</span>
+              <span style={{ color: '#19B802' }}>+6%</span>
+              <span className="text-foreground ml-1">(${(totalBalance * 0.06).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})</span>
+              <ChevronRight className="h-4 w-4 text-foreground/50" />
             </button>
           </div>
         </div>
 
         {/* Main Bucket Card */}
         <div 
-          className="p-8 rounded-[32px] mb-4 cursor-pointer transition-all duration-300 ease-out relative z-0 main-bucket-card"
+          className="p-8 rounded-[24px] mb-4 cursor-pointer transition-all duration-300 ease-out relative z-0 main-bucket-card"
           style={{ 
             animation: 'fadeInUp 0.6s ease-out 0s both'
           }}
@@ -467,7 +539,7 @@ function HomePageContent() {
               {/* Amount section - single amount only */}
               <div>
                 <div className="flex items-baseline gap-1">
-                  <span className="text-[32px] max-sm:text-[24px] font-semibold tracking-tight text-foreground">
+                  <span className="text-[24px] font-semibold tracking-tight text-foreground">
                     ${mainBucketAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </span>
                 </div>
@@ -481,7 +553,7 @@ function HomePageContent() {
                 onClick={() => {
                   // Handle add balance action - placeholder
                 }}
-                className="text-[14px] font-medium border border-white/20"
+                className="text-[14px] font-medium border border-foreground/20"
               >
                 Add funds
               </Button>
@@ -510,7 +582,13 @@ function HomePageContent() {
             </div>
           ))}
         </div>
+
+        {/* Add bottom padding to account for tab bar */}
+        <div className="h-20"></div>
       </div>
+
+      {/* Tab Bar Navigation */}
+      <TabBar />
     </div>
   )
 }

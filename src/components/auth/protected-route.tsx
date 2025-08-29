@@ -2,7 +2,7 @@
 
 import { useAuth } from '@/contexts/auth-context'
 import { useRouter } from 'next/navigation'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 
 interface ProtectedRouteProps {
   children: React.ReactNode
@@ -12,10 +12,16 @@ interface ProtectedRouteProps {
 export function ProtectedRoute({ children, redirectTo = '/login' }: ProtectedRouteProps) {
   const { user, loading } = useAuth()
   const router = useRouter()
+  const [isDemoMode, setIsDemoMode] = useState(false)
+  const [mounted, setMounted] = useState(false)
   
-  // Check for demo mode (only on client side)
-  const isDemoMode = typeof window !== 'undefined' && 
-    (window.location?.search?.includes('demo=true') || localStorage?.getItem('demo_mode') === 'true')
+  useEffect(() => {
+    setMounted(true)
+    // Check for demo mode only after component mounts
+    const demoMode = window.location?.search?.includes('demo=true') || 
+                     localStorage?.getItem('demo_mode') === 'true'
+    setIsDemoMode(demoMode)
+  }, [])
 
   useEffect(() => {
     // Skip protection in demo mode
@@ -33,8 +39,8 @@ export function ProtectedRoute({ children, redirectTo = '/login' }: ProtectedRou
     }
   }, [user, loading, router, redirectTo, isDemoMode])
 
-  // Show loading state (skip in demo mode)
-  if (!isDemoMode && loading) {
+  // Show loading state while mounting or checking auth
+  if (!mounted || (!isDemoMode && loading)) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-foreground/50">Loading...</div>

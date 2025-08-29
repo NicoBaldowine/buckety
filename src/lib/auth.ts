@@ -46,6 +46,11 @@ export const authService = {
         return { success: false, error: error.message }
       }
 
+      // Verify session was created
+      if (!data.session) {
+        return { success: false, error: 'No session created' }
+      }
+
       return { success: true, user: data.user, session: data.session }
     } catch (error) {
       console.error('Sign in error:', error)
@@ -96,6 +101,14 @@ export const authService = {
     try {
       const { data: { session }, error } = await supabase.auth.getSession()
       if (error) {
+        // Handle invalid refresh token errors
+        if (error.message?.includes('Invalid Refresh Token') || 
+            error.message?.includes('Refresh Token Not Found')) {
+          console.warn('Invalid refresh token detected, clearing auth state')
+          // Clear the invalid session from storage
+          await supabase.auth.signOut({ scope: 'local' })
+          return null
+        }
         console.error('Get session error:', error)
         return null
       }
@@ -110,7 +123,20 @@ export const authService = {
   async getUser(): Promise<AuthUser | null> {
     try {
       const { data: { user }, error } = await supabase.auth.getUser()
-      if (error || !user) {
+      if (error) {
+        // Handle invalid refresh token errors
+        if (error.message?.includes('Invalid Refresh Token') || 
+            error.message?.includes('Refresh Token Not Found')) {
+          console.warn('Invalid refresh token detected, clearing auth state')
+          // Clear the invalid session from storage
+          await supabase.auth.signOut({ scope: 'local' })
+          return null
+        }
+        console.error('Get user error:', error)
+        return null
+      }
+      
+      if (!user) {
         return null
       }
 

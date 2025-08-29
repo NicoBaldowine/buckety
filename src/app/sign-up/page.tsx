@@ -17,6 +17,8 @@ export default function SignUpPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState("")
   const [showPassword, setShowPassword] = useState(false)
+  const [showEmailConfirmation, setShowEmailConfirmation] = useState(false)
+  const [isResending, setIsResending] = useState(false)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -33,8 +35,8 @@ export default function SignUpPage() {
         // User is automatically signed in
         router.push('/home')
       } else {
-        // Email confirmation required
-        setError("Please check your email and click the confirmation link to complete your registration.")
+        // Email confirmation required - show confirmation screen
+        setShowEmailConfirmation(true)
       }
     } else {
       setError(result.error || "Failed to create account")
@@ -63,13 +65,140 @@ export default function SignUpPage() {
     }
   }
 
+  const handleResendEmail = async () => {
+    if (!email) return
+    
+    setIsResending(true)
+    setError("")
+    
+    try {
+      // Call sign up again to resend confirmation email
+      const result = await authService.signUp(email, password, name)
+      if (result.success) {
+        setError("")
+        // Show success message briefly
+        setTimeout(() => setError(""), 3000)
+      } else {
+        setError(result.error || "Failed to resend email")
+      }
+    } catch (error) {
+      console.error('Error resending email:', error)
+      setError("Failed to resend email")
+    } finally {
+      setIsResending(false)
+    }
+  }
+  
+  const handleBackToSignUp = () => {
+    setShowEmailConfirmation(false)
+    setError("")
+  }
+
   const isFormValid = () => {
     return email && password && password.length >= 6
   }
 
+  // Show email confirmation screen if needed
+  if (showEmailConfirmation) {
+    return (
+      <div className="min-h-screen bg-background transition-all duration-500 ease-out">
+        <div className="max-w-[520px] mx-auto px-12 py-6 max-sm:px-4 max-sm:py-3 min-h-screen flex items-center">
+          <div className="w-full">
+            {/* Logo */}
+            <div className="flex justify-center mb-10">
+              <div className="relative w-48 h-16">
+                <Image 
+                  src="/zuma-light.svg" 
+                  alt="Zuma Logo" 
+                  fill
+                  className="object-contain dark:hidden"
+                />
+                <Image 
+                  src="/zuma-dark.svg" 
+                  alt="Zuma Logo" 
+                  fill
+                  className="object-contain hidden dark:block"
+                />
+              </div>
+            </div>
+            
+            {/* Header */}
+            <div 
+              className="text-center mb-10"
+              style={{ animation: 'fadeInUp 0.5s ease-out 0.1s both' }}
+            >
+              <h1 
+                className="text-[32px] font-semibold text-foreground mb-4"
+                style={{ letterSpacing: '-0.03em' }}
+              >
+                Check your email
+              </h1>
+              <p className="text-[16px] text-foreground/60 leading-relaxed">
+                We sent a confirmation link to <span className="font-semibold">{email}</span>. 
+                Click the link in your email to complete your registration.
+              </p>
+            </div>
+
+            {/* Error Message */}
+            {error && (
+              <div 
+                className="text-red-500 text-[14px] font-medium text-center mb-6"
+                style={{ animation: 'fadeInUp 0.3s ease-out both' }}
+              >
+                {error}
+              </div>
+            )}
+
+            {/* Action Buttons */}
+            <div 
+              className="space-y-4 mb-8"
+              style={{ animation: 'fadeInUp 0.5s ease-out 0.2s both' }}
+            >
+              <Button 
+                type="button"
+                variant="primary"
+                onClick={handleResendEmail}
+                disabled={isResending}
+                className="w-full"
+              >
+                {isResending ? 'Sending...' : 'Resend confirmation email'}
+              </Button>
+              
+              <Button 
+                type="button"
+                variant="secondary"
+                onClick={handleBackToSignUp}
+                className="w-full"
+              >
+                Back to sign up
+              </Button>
+            </div>
+
+            {/* Already confirmed link */}
+            <div 
+              className="text-center"
+              style={{ animation: 'fadeInUp 0.5s ease-out 0.3s both' }}
+            >
+              <p className="text-[14px] text-foreground/60">
+                Already confirmed your email?{' '}
+                <button 
+                  type="button"
+                  onClick={() => router.push('/login')}
+                  className="text-foreground font-semibold hover:opacity-80 transition-opacity cursor-pointer"
+                >
+                  Sign in
+                </button>
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-background transition-all duration-500 ease-out">
-      <div className="max-w-[520px] mx-auto px-12 py-6 min-h-screen flex items-center">
+      <div className="max-w-[520px] mx-auto px-12 py-6 max-sm:px-4 max-sm:py-3 min-h-screen flex items-center">
         <div className="w-full">
           {/* Logo */}
           <div className="flex justify-center mb-10">
@@ -95,7 +224,7 @@ export default function SignUpPage() {
             style={{ animation: 'fadeInUp 0.5s ease-out 0.1s both' }}
           >
             <h1 
-              className="text-[40px] font-semibold text-foreground"
+              className="text-[32px] font-semibold text-foreground"
               style={{ letterSpacing: '-0.03em' }}
             >
               Create account

@@ -2,6 +2,7 @@
 
 import { Button } from "@/components/ui/button"
 import { Select, SelectItem } from "@/components/ui/select"
+import { ConfirmationModal } from "@/components/ui/modal"
 import { ProtectedRoute } from "@/components/auth/protected-route"
 import { ArrowLeft, X } from "lucide-react"
 import { useRouter, useSearchParams } from "next/navigation"
@@ -40,6 +41,7 @@ function EditAutoDepositContent() {
   const [customDate, setCustomDate] = useState('')
   const [isSaving, setIsSaving] = useState(false)
   const [isCanceling, setIsCanceling] = useState(false)
+  const [showCancelModal, setShowCancelModal] = useState(false)
   
   const [isTyping, setIsTyping] = useState(false)
   const [hasInsufficientBalance, setHasInsufficientBalance] = useState(false)
@@ -212,18 +214,24 @@ function EditAutoDepositContent() {
         toBucketId: toAccount.id
       })
 
-      // Navigate back to bucket details with proper URL format
+      // Navigate back to bucket details - but set context so back button goes to home
       const localBuckets = HybridStorage.getLocalBuckets(user?.id)
       const bucket = localBuckets.find((b: { id: string }) => b.id === toAccount.id)
       
       if (bucket) {
+        // Set navigation context in sessionStorage
+        if (typeof window !== 'undefined') {
+          sessionStorage.setItem('navigation_context', 'fromAutoDeposit')
+        }
+        
         const params = new URLSearchParams({
           id: bucket.id || '',
           title: bucket.title || '',
           currentAmount: (bucket.currentAmount || 0).toString(),
           targetAmount: (bucket.targetAmount || 0).toString(),
           backgroundColor: bucket.backgroundColor || '#ffffff',
-          apy: (bucket.apy || 0).toString()
+          apy: (bucket.apy || 0).toString(),
+          fromAutoDeposit: 'true'  // Add this flag to indicate we came from auto deposit
         })
         router.push(`/bucket-details?${params.toString()}`)
       } else {
@@ -243,28 +251,41 @@ function EditAutoDepositContent() {
     if (!bucketId) return
     
     setIsCanceling(true)
+    setShowCancelModal(false)
+    
     try {
       // Remove auto deposit from localStorage
       const autoDepositsKey = `auto_deposits_${bucketId}`
+      console.log('🗑️ Removing auto deposit from localStorage with key:', autoDepositsKey)
       localStorage.removeItem(autoDepositsKey)
+      
+      // Verify it was removed
+      const checkRemoved = localStorage.getItem(autoDepositsKey)
+      console.log('✅ Verification - auto deposit removed?', checkRemoved === null ? 'YES' : 'NO, still exists')
       
       // TODO: Cancel auto deposit in database
       // await autoDepositService.cancelAutoDeposit(...)
       
-      console.log('Canceled auto deposit for bucket:', bucketId)
+      console.log('✅ Canceled auto deposit for bucket:', bucketId)
       
-      // Navigate back to bucket details with proper URL format
+      // Navigate back to bucket details - but set context so back button goes to home
       const localBuckets = HybridStorage.getLocalBuckets(user?.id)
       const bucket = localBuckets.find((b: { id: string }) => b.id === bucketId)
       
       if (bucket) {
+        // Set navigation context in sessionStorage
+        if (typeof window !== 'undefined') {
+          sessionStorage.setItem('navigation_context', 'fromAutoDeposit')
+        }
+        
         const params = new URLSearchParams({
           id: bucket.id || '',
           title: bucket.title || '',
           currentAmount: (bucket.currentAmount || 0).toString(),
           targetAmount: (bucket.targetAmount || 0).toString(),
           backgroundColor: bucket.backgroundColor || '#ffffff',
-          apy: (bucket.apy || 0).toString()
+          apy: (bucket.apy || 0).toString(),
+          fromAutoDeposit: 'true'  // Add this flag to indicate we came from auto deposit
         })
         router.push(`/bucket-details?${params.toString()}`)
       } else {
@@ -441,7 +462,7 @@ function EditAutoDepositContent() {
         >
           <Button 
             variant="secondary"
-            onClick={handleCancelAutoDeposit}
+            onClick={() => setShowCancelModal(true)}
             disabled={isCanceling}
             className="text-[14px] font-medium"
           >
@@ -457,6 +478,19 @@ function EditAutoDepositContent() {
           </Button>
         </div>
       </div>
+
+      {/* Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={showCancelModal}
+        onClose={() => setShowCancelModal(false)}
+        onConfirm={handleCancelAutoDeposit}
+        title="Cancel auto deposit?"
+        description={`Are you sure you want to cancel the auto deposit for ${toAccount?.title || 'this bucket'}? This action cannot be undone.`}
+        confirmLabel="Cancel auto deposit"
+        cancelLabel="Keep auto deposit"
+        variant="danger"
+        loading={isCanceling}
+      />
     </div>
   )
 }

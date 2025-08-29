@@ -296,6 +296,10 @@ function BucketDetailsContent() {
           }
         } else {
           console.log('❌ No auto deposits found in localStorage for bucket:', bucketData.id)
+          // Clear auto deposits if none found
+          setAutoDeposits([])
+          setLoadingAutoDeposits(false)
+          return // Exit early if no local storage data
         }
         
         // Then try to load from database
@@ -318,6 +322,62 @@ function BucketDetailsContent() {
     }
     
     loadAutoDeposits()
+  }, [bucketData.id])
+  
+  // Add listener to reload auto deposits when returning to the page
+  useEffect(() => {
+    const checkAutoDeposits = () => {
+      if (bucketData.id && bucketData.id !== 'main-bucket') {
+        const autoDepositsKey = `auto_deposits_${bucketData.id}`
+        const localAutoDeposits = localStorage.getItem(autoDepositsKey)
+        
+        console.log(`🔍 Checking auto deposits for key ${autoDepositsKey}:`, localAutoDeposits ? 'FOUND' : 'NOT FOUND')
+        
+        if (!localAutoDeposits || localAutoDeposits === 'null' || localAutoDeposits === 'undefined') {
+          // If no auto deposits in localStorage, clear the state
+          setAutoDeposits([])
+          console.log('🔄 Auto deposits cleared - no data in localStorage')
+        } else {
+          try {
+            const deposits = JSON.parse(localAutoDeposits)
+            // Check if deposits is actually an array with content
+            if (Array.isArray(deposits) && deposits.length > 0) {
+              setAutoDeposits(deposits)
+              console.log('🔄 Auto deposits reloaded:', deposits.length)
+            } else {
+              setAutoDeposits([])
+              console.log('🔄 Auto deposits cleared - empty array')
+            }
+          } catch (e) {
+            console.error('Error parsing auto deposits:', e)
+            setAutoDeposits([])
+          }
+        }
+      }
+    }
+    
+    // Check when page becomes visible
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        checkAutoDeposits()
+      }
+    }
+    
+    // Check on mount
+    checkAutoDeposits()
+    
+    // Add event listeners
+    window.addEventListener('focus', checkAutoDeposits)
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    
+    // Also check on interval as fallback
+    const interval = setInterval(checkAutoDeposits, 500) // Check more frequently
+    
+    return () => {
+      window.removeEventListener('focus', checkAutoDeposits)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      clearInterval(interval)
+    }
   }, [bucketData.id])
 
   const [animatedCurrentAmount, setAnimatedCurrentAmount] = useState(0)
@@ -363,6 +423,7 @@ function BucketDetailsContent() {
       
       if (transferAmountParam) {
         const transferAmount = parseFloat(transferAmountParam)
+        const fromSource = searchParams.get('fromSource') || 'Main Bucket'
         const now = new Date()
         const formattedDate = now.toLocaleDateString('en-US', { 
           month: 'short', 
@@ -370,10 +431,10 @@ function BucketDetailsContent() {
           year: 'numeric' 
         })
         
-        // Create new activity for the transfer
+        // Create new activity for the transfer with proper source label
         const activity = {
           id: Date.now(),
-          title: "Money transfer",
+          title: `From ${fromSource}`,
           date: formattedDate,
           amount: `+$${transferAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
         }
@@ -386,6 +447,7 @@ function BucketDetailsContent() {
         const params = new URLSearchParams(searchParams?.toString() || '')
         params.delete('fromTransfer')
         params.delete('transferAmount')
+        params.delete('fromSource')
         params.delete('fromCreate')
         params.delete('fromAutoDeposit')
         window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}`)
@@ -435,7 +497,7 @@ function BucketDetailsContent() {
         backgroundColor: bucketData.backgroundColor
       }}
     >
-      {/* Sticky header */}
+      {/* Sticky header - matches original header exactly */}
       <div 
         className={`fixed top-0 left-0 right-0 z-50 border-b border-black/10 transition-all duration-300 ${
           showStickyHeader ? 'translate-y-0 opacity-100' : '-translate-y-full opacity-0'
@@ -444,46 +506,109 @@ function BucketDetailsContent() {
       >
         <div className="max-w-[660px] mx-auto px-12 py-4 max-sm:px-4">
           <div className="flex items-center justify-between">
+            <Button 
+              variant="secondary-icon" 
+              icon={<ArrowLeft />} 
+              onClick={() => {
+                const fromTransfer = searchParams.get('fromTransfer')
+                const fromAutoDeposit = searchParams.get('fromAutoDeposit')
+                const fromCreate = searchParams.get('fromCreate')
+                
+                let navigationContext = ''
+                if (typeof window !== 'undefined') {
+                  navigationContext = sessionStorage.getItem('navigation_context') || ''
+                }
+                
+                const shouldGoHome = fromTransfer === 'true' || 
+                                   fromAutoDeposit === 'true' || 
+                                   fromCreate === 'true' ||
+                                   navigationContext === 'fromTransfer' ||
+                                   navigationContext === 'fromAutoDeposit' ||
+                                   navigationContext === 'fromCreate'
+                
+                if (shouldGoHome) {
+                  if (typeof window !== 'undefined') {
+                    sessionStorage.removeItem('navigation_context')
+                  }
+                  router.push('/home')
+                } else {
+                  router.back()
+                }
+              }}
+              className="!bg-black/10 !text-black"
+            />
             <div className="flex items-center gap-3">
-              <Button variant="secondary" onClick={() => router.push(`/add-money?to=${bucketData.id}`)}>
-                Add money
+              <DropdownMenu
+                trigger={
+                  <Button 
+                    variant="secondary-icon" 
+                    icon={<MoreVertical />}
+                    className="!bg-black/10 !text-black"
+                  />
+                }
+              >
+                {bucketData.id !== 'main-bucket' && (
+                  <DropdownMenuItem onClick={() => {
+                    const params = new URLSearchParams(searchParams?.toString() || '')
+                    router.push(`/edit-bucket?${params.toString()}`)
+                  }}>
+                    <Edit className="h-4 w-4" />
+                    Edit bucket
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuItem>
+                  <ArrowUpFromLine className="h-4 w-4" />
+                  Withdraw money
+                </DropdownMenuItem>
+                {/* Only show auto deposit option if bucket is not completed */}
+                {!(displayCurrentAmount >= bucketData.targetAmount) && (
+                  <>
+                    {autoDeposits.length > 0 ? (
+                      <DropdownMenuItem onClick={() => {
+                        router.push(`/edit-auto-deposit?bucket=${bucketData.id}`)
+                      }}>
+                        <Repeat className="h-4 w-4" />
+                        Edit auto deposit
+                      </DropdownMenuItem>
+                    ) : (
+                      <DropdownMenuItem onClick={() => {
+                        router.push(`/add-money?to=${bucketData.id}&showAutoDeposit=true`)
+                      }}>
+                        <Repeat className="h-4 w-4" />
+                        Auto deposit
+                      </DropdownMenuItem>
+                    )}
+                  </>
+                )}
+                {bucketData.id !== 'main-bucket' && (
+                  <DropdownMenuItem onClick={() => setShowDeleteModal(true)}>
+                    <Trash2 className="h-4 w-4" />
+                    Delete bucket
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenu>
+              <Button 
+                variant="primary" 
+                icon={bucketData.id !== 'main-bucket' && displayCurrentAmount >= bucketData.targetAmount ? <Download /> : <Plus />} 
+                iconPosition="left"
+                className="!bg-black !text-white"
+                onClick={() => {
+                  if (bucketData.id !== 'main-bucket' && displayCurrentAmount >= bucketData.targetAmount) {
+                    alert('Withdraw functionality coming soon!')
+                  } else {
+                    router.push(`/add-money?to=${bucketData.id}`)
+                  }
+                }}
+              >
+                {bucketData.id === 'main-bucket' 
+                  ? 'Add funds' 
+                  : (displayCurrentAmount >= bucketData.targetAmount ? 'Withdraw' : 'Add money')
+                }
               </Button>
-              {bucketData.targetAmount > 0 && displayCurrentAmount < bucketData.targetAmount && (
-                <Button 
-                  variant="primary"
-                  onClick={() => router.push(`/add-money?to=${bucketData.id}&showAutoDeposit=true`)}
-                >
-                  Auto deposit
-                </Button>
-              )}
             </div>
-            <DropdownMenu 
-              trigger={<Button variant="secondary-icon" icon={<MoreVertical />} />}
-            >
-              {bucketData.id !== 'main-bucket' && (
-                <DropdownMenuItem onClick={() => {
-                  const params = new URLSearchParams(searchParams?.toString() || '')
-                  router.push(`/edit-bucket?${params.toString()}`)
-                }}>
-                  <Edit className="h-4 w-4" />
-                  Edit bucket
-                </DropdownMenuItem>
-              )}
-              <DropdownMenuItem>
-                <ArrowUpFromLine className="h-4 w-4" />
-                Withdraw money
-              </DropdownMenuItem>
-              {bucketData.id !== 'main-bucket' && (
-                <DropdownMenuItem onClick={() => setShowDeleteModal(true)}>
-                  <Trash2 className="h-4 w-4" />
-                  Delete bucket
-                </DropdownMenuItem>
-              )}
-            </DropdownMenu>
           </div>
         </div>
       </div>
-
       <div className="max-w-[660px] mx-auto px-12 py-6 max-sm:px-4 max-sm:py-3">
         {/* Header with navigation and actions */}
         <div 
@@ -500,10 +625,37 @@ function BucketDetailsContent() {
               const fromAutoDeposit = searchParams.get('fromAutoDeposit')
               const fromCreate = searchParams.get('fromCreate')
               
-              // Always go home after these specific actions
-              if (fromTransfer === 'true' || fromAutoDeposit === 'true' || fromCreate === 'true') {
+              // Check sessionStorage as fallback
+              let navigationContext = ''
+              if (typeof window !== 'undefined') {
+                navigationContext = sessionStorage.getItem('navigation_context') || ''
+              }
+              
+              console.log('🔙 Back button clicked:', {
+                fromTransfer,
+                fromAutoDeposit,
+                fromCreate,
+                navigationContext,
+                allParams: Object.fromEntries(searchParams.entries())
+              })
+              
+              // Always go home after these specific actions (check both URL params and sessionStorage)
+              const shouldGoHome = fromTransfer === 'true' || 
+                                 fromAutoDeposit === 'true' || 
+                                 fromCreate === 'true' ||
+                                 navigationContext === 'fromTransfer' ||
+                                 navigationContext === 'fromAutoDeposit' ||
+                                 navigationContext === 'fromCreate'
+              
+              if (shouldGoHome) {
+                console.log('🏠 Going to home due to special navigation flag')
+                // Clear navigation context
+                if (typeof window !== 'undefined') {
+                  sessionStorage.removeItem('navigation_context')
+                }
                 router.push('/home')
               } else {
+                console.log('⬅️ Going back normally')
                 router.back()
               }
             }}

@@ -31,23 +31,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const emergencyTimeout = setTimeout(() => {
       console.warn('Emergency timeout - forcing loading to false')
       setLoading(false)
-    }, 5000)
+    }, 500) // Reduced from 2000ms to 500ms for faster response
 
     // Get initial session
     const initializeAuth = async () => {
       try {
         console.log('Starting auth initialization...')
-        
-        // Check if user just logged in (only on client side)
-        if (typeof window !== 'undefined') {
-          const justLoggedIn = localStorage.getItem('just_logged_in')
-          if (justLoggedIn) {
-            localStorage.removeItem('just_logged_in')
-            console.log('User just logged in, giving auth time to settle...')
-            // Give Supabase time to settle the session
-            await new Promise(resolve => setTimeout(resolve, 500))
-          }
-        }
         
         const initialSession = await authService.getSession()
         console.log('Got initial session:', !!initialSession)
@@ -62,6 +51,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.log('Auth initialization completed')
       } catch (error) {
         console.error('Error initializing auth:', error)
+        
+        // Handle refresh token errors specifically
+        if (error instanceof Error && 
+            (error.message?.includes('Invalid Refresh Token') || 
+             error.message?.includes('Refresh Token Not Found'))) {
+          console.warn('Invalid refresh token during initialization, clearing storage')
+          // Clear all auth-related localStorage
+          if (typeof window !== 'undefined') {
+            localStorage.removeItem('supabase.auth.token')
+            // Clear any other Supabase auth keys
+            Object.keys(localStorage).forEach(key => {
+              if (key.startsWith('sb-')) {
+                localStorage.removeItem(key)
+              }
+            })
+          }
+        }
+        
         setUser(null)
         setSession(null)
       } finally {
@@ -76,6 +83,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const { data: { subscription } } = authService.onAuthStateChange(
       async (event, session) => {
         console.log('Auth state changed:', event, session)
+        
+        // Handle token refresh errors
+        if (event === 'TOKEN_REFRESHED' && !session) {
+          console.warn('Token refresh failed, clearing auth state')
+          setSession(null)
+          setUser(null)
+          setLoading(false)
+          return
+        }
+        
         setSession(session)
         
         if (session) {
@@ -84,7 +101,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setUser(currentUser)
           } catch (error) {
             console.error('Error getting user on auth state change:', error)
+            // Clear auth state on error
             setUser(null)
+            setSession(null)
           }
         } else {
           setUser(null)

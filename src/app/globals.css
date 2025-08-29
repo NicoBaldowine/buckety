@@ -158,11 +158,38 @@ input:-webkit-autofill:active {
 
 .main-bucket-card:hover {
   background-color: var(--secondary);
-  filter: brightness(0.95);
+  filter: brightness(0.88);
 }
 
 @media (prefers-color-scheme: dark) {
   .main-bucket-card:hover {
-    filter: brightness(1.05);
+    filter: brightness(1.15);
   }
+}
+
+[data-theme="light"] .main-bucket-card:hover {
+  filter: brightness(0.88);
+}
+
+[data-theme="dark"] .main-bucket-card:hover {
+  filter: brightness(1.15);
+}
+
+/* Remove focus outline from Recharts elements */
+.recharts-wrapper,
+.recharts-wrapper *,
+.recharts-wrapper svg,
+.recharts-wrapper svg *,
+.recharts-surface {
+  outline: none !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.recharts-wrapper *:focus,
+.recharts-wrapper svg:focus,
+.recharts-wrapper svg *:focus {
+  outline: none !important;
+  border: none !important;
+  box-shadow: none !important;
 }
