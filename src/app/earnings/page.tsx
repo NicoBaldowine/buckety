@@ -6,7 +6,6 @@ import { ArrowLeft } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useState, useEffect } from "react"
 import { useAuth } from "@/contexts/auth-context"
-import { HybridStorage } from "@/lib/hybrid-storage"
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 
 export default function EarningsPage() {
@@ -20,8 +19,15 @@ export default function EarningsPage() {
 function EarningsContent() {
   const router = useRouter()
   const { user } = useAuth()
-  const [chartData, setChartData] = useState<any[]>([])
-  const [hoveredData, setHoveredData] = useState<any>(null)
+  interface ChartDataPoint {
+    month: string
+    balance: number
+    earnings: number
+    deposit: number
+  }
+
+  const [chartData, setChartData] = useState<ChartDataPoint[]>([])
+  const [hoveredData, setHoveredData] = useState<ChartDataPoint | null>(null)
   const [displayBalance, setDisplayBalance] = useState(0)
   const [displayEarnings, setDisplayEarnings] = useState(0)
 
@@ -175,14 +181,15 @@ function EarningsContent() {
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart 
                 data={chartData}
-                onMouseMove={(event: any) => {
-                  console.log('onMouseMove event:', event)
-                  if (event && event.activePayload && event.activePayload.length > 0) {
-                    const payload = event.activePayload[0].payload
-                    console.log('Setting hover data:', payload)
-                    setHoveredData(payload)
-                    setDisplayBalance(payload.balance)
-                    setDisplayEarnings(payload.earnings)
+                onMouseMove={(event: unknown) => {
+                  if (event && typeof event === 'object' && 'activePayload' in event) {
+                    const eventObj = event as { activePayload?: Array<{ payload: ChartDataPoint }> }
+                    if (Array.isArray(eventObj.activePayload) && eventObj.activePayload.length > 0) {
+                      const payload = eventObj.activePayload[0].payload
+                      setHoveredData(payload)
+                      setDisplayBalance(payload.balance)
+                      setDisplayEarnings(payload.earnings)
+                    }
                   }
                 }}
                 margin={{ top: 10, right: 30, left: 15, bottom: 30 }}
@@ -227,18 +234,7 @@ function EarningsContent() {
                 />
                 
                 <Tooltip
-                  content={({ active, payload }) => {
-                    if (active && payload && payload.length > 0) {
-                      const data = payload[0].payload
-                      // Use setTimeout to avoid React state update warning
-                      setTimeout(() => {
-                        setHoveredData(data)
-                        setDisplayBalance(data.balance)
-                        setDisplayEarnings(data.earnings)
-                      }, 0)
-                    }
-                    return null
-                  }}
+                  content={() => null}
                   cursor={{ stroke: '#19B802', strokeWidth: 1, strokeOpacity: 0.5 }}
                 />
                 

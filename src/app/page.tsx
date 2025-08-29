@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
 import { useEffect } from "react"
+import Image from "next/image"
 
 export default function LandingPage() {
   const router = useRouter()
@@ -53,14 +54,18 @@ export default function LandingPage() {
       <header className="flex items-center justify-between p-6">
         <div className="flex items-center gap-2">
           {/* Logo - switches based on theme */}
-          <img 
+          <Image 
             src="/zuma-dark.svg" 
             alt="Zuma" 
+            width={32}
+            height={32}
             className="h-8 dark:hidden"
           />
-          <img 
+          <Image 
             src="/zuma-light.svg" 
             alt="Zuma" 
+            width={32}
+            height={32}
             className="h-8 hidden dark:block"
           />
         </div>
