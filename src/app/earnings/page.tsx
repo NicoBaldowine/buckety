@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button"
 import { ProtectedRoute } from "@/components/auth/protected-route"
 import { ArrowLeft } from "lucide-react"
 import { useRouter } from "next/navigation"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { useAuth } from "@/contexts/auth-context"
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 
@@ -30,6 +30,7 @@ function EarningsContent() {
   const [hoveredData, setHoveredData] = useState<ChartDataPoint | null>(null)
   const [displayBalance, setDisplayBalance] = useState(0)
   const [displayEarnings, setDisplayEarnings] = useState(0)
+  const [activeIndex, setActiveIndex] = useState<number | null>(null)
 
   // Calculate earnings data from user's actual buckets and transactions
   useEffect(() => {
@@ -105,6 +106,7 @@ function EarningsContent() {
   // Reset to current values when hover ends
   const handleMouseLeave = () => {
     setHoveredData(null)
+    setActiveIndex(null)
     const lastData = chartData[chartData.length - 1]
     if (lastData) {
       setDisplayBalance(lastData.balance)
@@ -112,12 +114,16 @@ function EarningsContent() {
     }
   }
 
+  // Track the active tooltip data without setting state in render
+  const activeDataRef = useRef<ChartDataPoint | null>(null)
+
+
   return (
     <div className="min-h-screen bg-background transition-all duration-500 ease-out">
       <div className="max-w-[660px] mx-auto px-12 py-6 max-sm:px-4 max-sm:py-3">
         {/* Header with back button */}
         <div 
-          className="flex items-center justify-between mb-15"
+          className="flex items-center justify-between mb-6"
           style={{ animation: 'slideInFromTop 0.4s ease-out 0.1s both' }}
         >
           <Button 
@@ -150,20 +156,20 @@ function EarningsContent() {
           style={{ animation: 'fadeInUp 0.5s ease-out 0.3s both' }}
         >
           {/* Total Balance and Total Earned - Interactive Values */}
-          <div className="flex justify-between items-center mb-8">
+          <div className="flex justify-between items-center mb-8 max-sm:flex-col max-sm:items-start max-sm:gap-4">
             <div>
               <p className="text-[14px] text-foreground/50 font-medium mb-0">
                 Total Balance
               </p>
-              <p className="text-[32px] font-semibold text-foreground transition-all duration-200" style={{ letterSpacing: '-0.03em' }}>
+              <p className="text-[32px] max-sm:text-[26px] font-semibold text-foreground transition-all duration-200" style={{ letterSpacing: '-0.03em' }}>
                 ${displayBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </p>
             </div>
-            <div className="text-right">
+            <div className="text-right max-sm:text-left">
               <p className="text-[14px] text-foreground/50 font-medium mb-0">
                 Total Earned {hoveredData ? `${hoveredData.month}` : `Aug 29, 2025`}
               </p>
-              <p className="text-[32px] font-semibold transition-all duration-200" style={{ color: '#19B802', letterSpacing: '-0.03em' }}>
+              <p className="text-[32px] max-sm:text-[26px] font-semibold transition-all duration-200" style={{ color: '#19B802', letterSpacing: '-0.03em' }}>
                 +${displayEarnings.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </p>
             </div>
@@ -172,7 +178,6 @@ function EarningsContent() {
           {/* Professional Interactive Chart */}
           <div 
             className="h-[250px] -mx-4 max-sm:-mx-6" 
-            onMouseLeave={handleMouseLeave} 
             style={{ 
               outline: 'none', 
               border: 'none'
@@ -181,17 +186,6 @@ function EarningsContent() {
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart 
                 data={chartData}
-                onMouseMove={(event: unknown) => {
-                  if (event && typeof event === 'object' && 'activePayload' in event) {
-                    const eventObj = event as { activePayload?: Array<{ payload: ChartDataPoint }> }
-                    if (Array.isArray(eventObj.activePayload) && eventObj.activePayload.length > 0) {
-                      const payload = eventObj.activePayload[0].payload
-                      setHoveredData(payload)
-                      setDisplayBalance(payload.balance)
-                      setDisplayEarnings(payload.earnings)
-                    }
-                  }
-                }}
                 margin={{ top: 10, right: 30, left: 15, bottom: 30 }}
               >
                 {/* Define gradient and pattern */}
@@ -234,8 +228,26 @@ function EarningsContent() {
                 />
                 
                 <Tooltip
-                  content={() => null}
+                  content={({ active, payload }) => {
+                    // Use setTimeout to avoid setState in render
+                    if (active && payload && payload.length > 0) {
+                      const data = payload[0].payload as ChartDataPoint
+                      setTimeout(() => {
+                        setHoveredData(data)
+                        setDisplayBalance(data.balance)
+                        setDisplayEarnings(data.earnings)
+                      }, 0)
+                    } else if (!active) {
+                      // Reset when not active
+                      setTimeout(() => {
+                        handleMouseLeave()
+                      }, 0)
+                    }
+                    return null
+                  }}
                   cursor={{ stroke: '#19B802', strokeWidth: 1, strokeOpacity: 0.5 }}
+                  wrapperStyle={{ outline: 'none' }}
+                  allowEscapeViewBox={{ x: false, y: false }}
                 />
                 
                 <Area 

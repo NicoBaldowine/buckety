@@ -38,6 +38,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         console.log('Starting auth initialization...')
         
+        // Clear any invalid tokens before starting
+        if (typeof window !== 'undefined') {
+          // Check for and clear any invalid Supabase tokens
+          Object.keys(localStorage).forEach(key => {
+            if (key.startsWith('sb-') && key.includes('auth-token')) {
+              try {
+                const tokenData = localStorage.getItem(key)
+                if (tokenData) {
+                  const parsed = JSON.parse(tokenData)
+                  // Check if refresh token exists and is not expired
+                  if (!parsed.refresh_token || (parsed.expires_at && parsed.expires_at < Date.now() / 1000)) {
+                    console.log('Clearing invalid/expired token:', key)
+                    localStorage.removeItem(key)
+                  }
+                }
+              } catch {
+                // If we can't parse it, remove it
+                console.log('Removing unparseable token:', key)
+                localStorage.removeItem(key)
+              }
+            }
+          })
+        }
+        
         const initialSession = await authService.getSession()
         console.log('Got initial session:', !!initialSession)
         setSession(initialSession)
@@ -56,7 +80,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (error instanceof Error && 
             (error.message?.includes('Invalid Refresh Token') || 
              error.message?.includes('Refresh Token Not Found'))) {
-          console.warn('Invalid refresh token during initialization, clearing storage')
+          console.warn('Invalid refresh token during initialization, clearing all auth storage')
           // Clear all auth-related localStorage
           if (typeof window !== 'undefined') {
             localStorage.removeItem('supabase.auth.token')

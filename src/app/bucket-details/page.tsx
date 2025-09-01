@@ -752,14 +752,14 @@ function BucketDetailsContent() {
           )}
           
           <h1 
-            className="text-[40px] max-sm:text-[20px] font-semibold text-black"
+            className="text-[40px] max-sm:text-[20px] font-semibold text-black max-sm:mb-2"
             style={{ letterSpacing: '-0.03em' }}
           >
             {bucketData.title}
           </h1>
           
           
-          <div className="flex items-baseline mt-2">
+          <div className="flex items-baseline mt-2 max-sm:mt-0 max-sm:mb-3">
             <div className="flex items-baseline gap-1">
               <span 
                 className="text-[32px] max-sm:text-[24px] font-semibold text-black"
@@ -782,7 +782,7 @@ function BucketDetailsContent() {
         {/* Progress bar - only for savings buckets, not main bucket */}
         {bucketData.id !== 'main-bucket' && (
           <div 
-            className="mb-10 relative"
+            className="mb-10 relative max-sm:mb-8 max-sm:-mt-2.5"
             style={{ animation: 'fadeInUp 0.5s ease-out 0.3s both' }}
           >
             <Progress 

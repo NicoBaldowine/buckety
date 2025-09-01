@@ -220,7 +220,7 @@ function CreateBucketContent() {
       <div className="max-w-[660px] mx-auto px-12 py-6 max-sm:px-4 max-sm:py-3">
         {/* Header with back button */}
         <div 
-          className="flex items-center justify-between mb-15"
+          className="flex items-center justify-between mb-6"
           style={{ animation: 'slideInFromTop 0.4s ease-out 0.1s both' }}
         >
           <Button 
@@ -232,7 +232,7 @@ function CreateBucketContent() {
 
         {/* Title */}
         <div 
-          className="mb-10"
+          className="mb-8"
           style={{ animation: 'fadeInUp 0.5s ease-out 0.2s both' }}
         >
           <h1 
@@ -303,9 +303,9 @@ function CreateBucketContent() {
             </div>
           </div>
 
-          {/* Submit Button */}
+          {/* Submit Button - Desktop */}
           <div 
-            className="pt-6 flex justify-end"
+            className="pt-6 flex justify-end max-sm:hidden"
             style={{ animation: 'fadeInUp 0.5s ease-out 0.5s both' }}
           >
             <Button 
@@ -318,6 +318,22 @@ function CreateBucketContent() {
             </Button>
           </div>
         </form>
+        
+        {/* Add padding at bottom for mobile to account for sticky button */}
+        <div className="h-24 sm:hidden"></div>
+      </div>
+      
+      {/* Sticky Submit Button - Mobile Only */}
+      <div className="fixed bottom-0 left-0 right-0 p-4 bg-background border-t border-foreground/10 sm:hidden">
+        <Button 
+          type="submit" 
+          variant="primary" 
+          disabled={!bucketName || !targetAmount}
+          onClick={handleSubmit}
+          className="w-full"
+        >
+          Create bucket
+        </Button>
       </div>
     </div>
   )

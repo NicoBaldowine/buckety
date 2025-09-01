@@ -539,9 +539,9 @@ function AddMoneyContent() {
           </div>
         )}
 
-        {/* Action Buttons */}
+        {/* Action Buttons - Desktop */}
         <div 
-          className="mt-16 flex justify-between items-center gap-3"
+          className="mt-16 flex justify-between items-center gap-3 max-sm:hidden"
           style={{ animation: 'fadeInUp 0.5s ease-out 0.4s both' }}
         >
           {showAutoDeposit ? (
@@ -564,6 +564,57 @@ function AddMoneyContent() {
                   (endType === 'custom_date' && !customDate)
                 }
                 className=""
+              >
+                {isSettingAutoDeposit ? 'Setting...' : 'Set auto deposit'}
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button 
+                variant="secondary"
+                onClick={() => setShowAutoDeposit(true)}
+                icon={<Repeat />}
+                className="text-[14px] font-medium"
+              >
+                Auto deposit
+              </Button>
+              <Button 
+                variant="primary"
+                disabled={!amount || parseFloat(amount) <= 0 || hasInsufficientBalance}
+                onClick={handleConvert}
+              >
+                Convert
+              </Button>
+            </>
+          )}
+        </div>
+        
+        {/* Add padding at bottom for mobile to account for sticky buttons */}
+        <div className="h-24 sm:hidden"></div>
+      </div>
+
+      {/* Sticky Action Buttons - Mobile Only */}
+      <div className="fixed bottom-0 left-0 right-0 p-4 bg-background border-t border-foreground/10 sm:hidden">
+        <div className="flex justify-between items-center gap-3">
+          {showAutoDeposit ? (
+            <>
+              <Button 
+                variant="secondary"
+                onClick={() => setShowAutoDeposit(false)}
+                className="text-[14px] font-medium"
+              >
+                Cancel
+              </Button>
+              <Button 
+                variant="primary"
+                onClick={handleSetAutoDeposit}
+                disabled={
+                  !amount || 
+                  parseFloat(amount) <= 0 || 
+                  hasInsufficientBalance || 
+                  isSettingAutoDeposit ||
+                  (endType === 'custom_date' && !customDate)
+                }
               >
                 {isSettingAutoDeposit ? 'Setting...' : 'Set auto deposit'}
               </Button>

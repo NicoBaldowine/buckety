@@ -458,7 +458,7 @@ function HomePageContent() {
 
       <div className="max-w-[660px] mx-auto px-12 py-6 max-sm:px-4 max-sm:py-3">
         {/* Top row with buttons and avatar */}
-        <div ref={headerRef} className="flex items-center justify-between mb-15">
+        <div ref={headerRef} className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
             <Button variant="primary" onClick={() => router.push('/create-bucket')}>
               Create bucket
@@ -471,7 +471,7 @@ function HomePageContent() {
         </div>
 
         {/* Balance section */}
-        <div className="flex items-center justify-between mb-10">
+        <div className="flex items-center justify-between mb-6">
           <div>
             <div className="flex items-center gap-2 mb-[-6px]">
               <p 
