@@ -26,18 +26,45 @@ const createSupabaseClient = () => {
       // In production runtime, use the hardcoded values as fallback
       return createClient(
         'https://tbhfbpykuidbcfmmcskf.supabase.co',
-        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRiaGZicHlrdWlkYmNmbW1jc2tmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU2NTc3NzQsImV4cCI6MjA3MTIzMzc3NH0.lOWd7Q3FdU_o1f6pTQgUvevv56ChsT4fmzdBlwwFY3M'
+        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRiaGZicHlrdWlkYmNmbW1jc2tmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU2NTc3NzQsImV4cCI6MjA3MTIzMzc3NH0.lOWd7Q3FdU_o1f6pTQgUvevv56ChsT4fmzdBlwwFY3M',
+        {
+          auth: {
+            persistSession: true,
+            autoRefreshToken: true,
+            detectSessionInUrl: true,
+            storage: typeof window !== 'undefined' ? window.localStorage : undefined,
+            flowType: 'pkce'
+          }
+        }
       )
     }
     // Validate URL format before passing to createClient
     new URL(supabaseUrl) // This will throw if URL is invalid
-    return createClient(supabaseUrl, supabaseAnonKey)
+    return createClient(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: true,
+        // Enable longer session storage
+        storage: typeof window !== 'undefined' ? window.localStorage : undefined,
+        flowType: 'pkce'
+      }
+    })
   } catch (error) {
     console.warn('Invalid Supabase URL, using hardcoded values:', error)
     // Use hardcoded values as absolute fallback
     return createClient(
       'https://tbhfbpykuidbcfmmcskf.supabase.co',
-      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRiaGZicHlrdWlkYmNmbW1jc2tmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU2NTc3NzQsImV4cCI6MjA3MTIzMzc3NH0.lOWd7Q3FdU_o1f6pTQgUvevv56ChsT4fmzdBlwwFY3M'
+      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRiaGZicHlrdWlkYmNmbW1jc2tmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU2NTc3NzQsImV4cCI6MjA3MTIzMzc3NH0.lOWd7Q3FdU_o1f6pTQgUvevv56ChsT4fmzdBlwwFY3M',
+      {
+        auth: {
+          persistSession: true,
+          autoRefreshToken: true,
+          detectSessionInUrl: true,
+          storage: typeof window !== 'undefined' ? window.localStorage : undefined,
+          flowType: 'pkce'
+        }
+      }
     )
   }
 }

@@ -31,30 +31,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const emergencyTimeout = setTimeout(() => {
       console.warn('Emergency timeout - forcing loading to false')
       setLoading(false)
-    }, 500) // Reduced from 2000ms to 500ms for faster response
+    }, 3000) // Increased to 3 seconds to allow proper auth initialization
 
     // Get initial session
     const initializeAuth = async () => {
       try {
         console.log('Starting auth initialization...')
         
-        // Clear any invalid tokens before starting
+        // Only clear obviously invalid tokens, let Supabase handle token refresh
         if (typeof window !== 'undefined') {
-          // Check for and clear any invalid Supabase tokens
+          // Only check for and clear completely corrupted tokens
           Object.keys(localStorage).forEach(key => {
             if (key.startsWith('sb-') && key.includes('auth-token')) {
               try {
                 const tokenData = localStorage.getItem(key)
                 if (tokenData) {
                   const parsed = JSON.parse(tokenData)
-                  // Check if refresh token exists and is not expired
-                  if (!parsed.refresh_token || (parsed.expires_at && parsed.expires_at < Date.now() / 1000)) {
-                    console.log('Clearing invalid/expired token:', key)
+                  // Only clear if there's no refresh token at all (completely invalid)
+                  if (!parsed.refresh_token && !parsed.access_token) {
+                    console.log('Clearing completely invalid token:', key)
                     localStorage.removeItem(key)
                   }
+                  // Let expired tokens be handled by Supabase refresh mechanism
                 }
               } catch {
-                // If we can't parse it, remove it
+                // If we can't parse it, it's definitely corrupted - remove it
                 console.log('Removing unparseable token:', key)
                 localStorage.removeItem(key)
               }
