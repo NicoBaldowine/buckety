@@ -842,6 +842,7 @@ function BucketDetailsContent() {
                 title={newActivity.title}
                 date={newActivity.date}
                 amount={newActivity.amount}
+                backgroundColor={bucketData.backgroundColor}
               />
             </div>
           )}
@@ -870,6 +871,8 @@ function BucketDetailsContent() {
                   (activity.amount >= 0 ? `+$${Math.abs(activity.amount)}` : `-$${Math.abs(activity.amount)}`) 
                   : undefined
                 }
+                activityType={activity.activity_type}
+                backgroundColor={bucketData.backgroundColor}
               />
             </div>
             ))
