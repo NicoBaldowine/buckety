@@ -73,7 +73,7 @@ const ActivityListItem = React.forwardRef<HTMLDivElement, ActivityListItemProps>
         {/* Activity icon circle */}
         <div 
           className="flex items-center justify-center w-10 h-10 rounded-full flex-shrink-0"
-          style={{ backgroundColor: 'rgba(0,0,0,0.1)' }}
+          style={{ backgroundColor: 'rgba(0,0,0,0.15)' }}
         >
           {getActivityIcon()}
         </div>
