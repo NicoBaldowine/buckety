@@ -620,7 +620,7 @@ function BucketDetailsContent() {
         {/* Header with navigation and actions */}
         <div 
           ref={headerRef}
-          className="flex items-center justify-between mb-4"
+          className="flex items-center justify-between mb-8"
           style={{ animation: 'slideInFromTop 0.4s ease-out 0.1s both' }}
         >
           <Button 
@@ -759,14 +759,14 @@ function BucketDetailsContent() {
           )}
           
           <h1 
-            className="text-[32px] max-sm:text-[20px] font-semibold text-black max-sm:mb-2"
-            style={{ letterSpacing: '-0.03em' }}
+            className="text-[14px] max-sm:text-[12px] font-semibold text-black"
+            style={{ letterSpacing: '-0.01em' }}
           >
             {bucketData.title}
           </h1>
           
           
-          <div className="flex items-baseline mt-2 max-sm:mt-0 max-sm:mb-6">
+          <div className="flex items-baseline mt-1 max-sm:mt-0 max-sm:mb-6">
             <div className="flex items-baseline gap-1">
               <span 
                 className={`${displayCurrentAmount >= bucketData.targetAmount && bucketData.id !== 'main-bucket' ? 'text-[40px]' : 'text-[32px]'} max-sm:text-[24px] font-semibold text-black`}
