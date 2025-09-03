@@ -3,6 +3,7 @@
 import { useAuth } from '@/contexts/auth-context'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
+import { AppLoadingScreen } from '@/components/ui/loading-spinner'
 
 interface ProtectedRouteProps {
   children: React.ReactNode
@@ -32,20 +33,13 @@ export function ProtectedRoute({ children, redirectTo = '/login' }: ProtectedRou
     
     // Only redirect if we're not loading and definitely don't have a user
     if (!loading && !user) {
-      console.log('ProtectedRoute: No user found, redirecting to login')
       router.push(redirectTo)
-    } else if (user) {
-      console.log('ProtectedRoute: User authenticated:', user.email)
     }
   }, [user, loading, router, redirectTo, isDemoMode])
 
-  // Show loading state while mounting or checking auth
+  // Show professional loading state while mounting or checking auth
   if (!mounted || (!isDemoMode && loading)) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-foreground/50">Loading...</div>
-      </div>
-    )
+    return <AppLoadingScreen />
   }
 
   // Don't render anything if user is not authenticated (skip in demo mode)
