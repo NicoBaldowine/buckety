@@ -477,11 +477,18 @@ function BucketDetailsContent() {
       requestAnimationFrame(animate)
     }
 
-    // Start synchronized animation
-    setTimeout(() => {
-      animateTogether(0, displayCurrentAmount, finalProgress, 1500)
-    }, 600)
-  }, [displayCurrentAmount, finalProgress])
+    // If bucket is completed, show it immediately without animation from 0
+    const isCompleted = displayCurrentAmount >= bucketData.targetAmount
+    if (isCompleted && bucketData.id !== 'main-bucket') {
+      setAnimatedCurrentAmount(displayCurrentAmount)
+      setAnimatedProgress(100)
+    } else {
+      // Start synchronized animation only if not completed
+      setTimeout(() => {
+        animateTogether(0, displayCurrentAmount, finalProgress, 1500)
+      }, 600)
+    }
+  }, [displayCurrentAmount, finalProgress, bucketData.targetAmount, bucketData.id])
 
   const handleManageAutoDeposit = () => {
     if (autoDeposits.length > 0) {
@@ -752,7 +759,7 @@ function BucketDetailsContent() {
           )}
           
           <h1 
-            className="text-[40px] max-sm:text-[20px] font-semibold text-black max-sm:mb-2"
+            className="text-[32px] max-sm:text-[20px] font-semibold text-black max-sm:mb-2"
             style={{ letterSpacing: '-0.03em' }}
           >
             {bucketData.title}
@@ -762,12 +769,12 @@ function BucketDetailsContent() {
           <div className="flex items-baseline mt-2 max-sm:mt-0 max-sm:mb-3">
             <div className="flex items-baseline gap-1">
               <span 
-                className="text-[32px] max-sm:text-[24px] font-semibold text-black"
+                className={`${displayCurrentAmount >= bucketData.targetAmount && bucketData.id !== 'main-bucket' ? 'text-[40px]' : 'text-[32px]'} max-sm:text-[24px] font-semibold text-black`}
                 style={{ letterSpacing: '-0.05em' }}
               >
                 ${animatedCurrentAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </span>
-              {bucketData.id !== 'main-bucket' && (
+              {bucketData.id !== 'main-bucket' && displayCurrentAmount < bucketData.targetAmount && (
                 <span 
                   className="text-[32px] max-sm:text-[24px] font-semibold text-black/40"
                   style={{ letterSpacing: '-0.05em' }}

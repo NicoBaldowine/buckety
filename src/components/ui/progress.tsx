@@ -102,8 +102,12 @@ const Progress = React.forwardRef<HTMLDivElement, ProgressProps>(
             style={{ zIndex: 50 }}
           >
             <div 
-              className="inline-flex items-center gap-1 px-3 py-1.5 text-black rounded-full h-7 shadow-sm border border-black/10"
-              style={{ backgroundColor: backgroundColor || 'white' }}
+              className="inline-flex items-center gap-1 px-3 py-1.5 text-black rounded-full h-7"
+              style={{ 
+                backgroundColor: backgroundColor ? 
+                  `rgba(${parseInt(backgroundColor.slice(1,3), 16)}, ${parseInt(backgroundColor.slice(3,5), 16)}, ${parseInt(backgroundColor.slice(5,7), 16)}, 0.7)` : 
+                  'rgba(255, 255, 255, 0.7)'
+              }}
             >
               <span className="text-sm">🎉</span>
               <span className="text-[12px] font-semibold" style={{ letterSpacing: '-0.02em' }}>
