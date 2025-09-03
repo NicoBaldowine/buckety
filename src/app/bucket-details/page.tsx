@@ -542,7 +542,7 @@ function BucketDetailsContent() {
                   router.back()
                 }
               }}
-              className="!bg-black/15 !text-black"
+              className="!bg-black/5 !text-black"
             />
             <div className="flex items-center gap-3">
               <DropdownMenu
@@ -550,7 +550,7 @@ function BucketDetailsContent() {
                   <Button 
                     variant="secondary-icon" 
                     icon={<MoreVertical />}
-                    className="!bg-black/15 !text-black"
+                    className="!bg-black/5 !text-black"
                   />
                 }
               >
@@ -666,7 +666,7 @@ function BucketDetailsContent() {
                 router.back()
               }
             }}
-            className="!bg-black/15 !text-black"
+            className="!bg-black/5 !text-black"
           />
           <div className="flex items-center gap-3">
             <DropdownMenu
@@ -674,7 +674,7 @@ function BucketDetailsContent() {
                 <Button 
                   variant="secondary-icon" 
                   icon={<MoreVertical />}
-                  className="!bg-black/15 !text-black"
+                  className="!bg-black/5 !text-black"
                 />
               }
             >
