@@ -76,7 +76,7 @@ const BucketCard = React.forwardRef<HTMLDivElement, BucketCardProps>(
         )}
         
         {/* Header with title */}
-        <div className="mb-2">
+        <div className="mb-1">
           <h3 className="text-[20px] font-semibold tracking-tight text-black">
             {title}
           </h3>
