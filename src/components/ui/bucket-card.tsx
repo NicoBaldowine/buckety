@@ -83,7 +83,7 @@ const BucketCard = React.forwardRef<HTMLDivElement, BucketCardProps>(
         </div>
         
         {/* Amount section */}
-        <div className="mb-4 -mt-1">
+        <div className="mb-4">
           <div className="flex items-baseline gap-1">
             <span className="text-[24px] font-semibold tracking-tight text-black">
               ${currentAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}

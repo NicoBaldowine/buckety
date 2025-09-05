@@ -329,8 +329,9 @@ function HomePageContent() {
     document.addEventListener('visibilitychange', handleVisibilityChange)
     
     // Also check auto deposits periodically to catch cancellations
+    // Only check every 5 seconds to avoid flashing, and check both localStorage and database
     const interval = setInterval(async () => {
-      if (buckets.length > 0) {
+      if (buckets.length > 0 && user) {
         const autoDepositChecks = await Promise.all(
           buckets.map(async (bucket) => {
             const autoDepositsKey = `auto_deposits_${bucket.id}`
@@ -339,12 +340,32 @@ function HomePageContent() {
             if (localAutoDeposits) {
               try {
                 const deposits = JSON.parse(localAutoDeposits)
-                return { bucketId: bucket.id, hasAutoDeposit: Array.isArray(deposits) && deposits.length > 0 }
+                // Only return true if we have valid deposits
+                if (Array.isArray(deposits) && deposits.length > 0) {
+                  return { bucketId: bucket.id, hasAutoDeposit: true }
+                }
               } catch {
-                return { bucketId: bucket.id, hasAutoDeposit: false }
+                // Parse failed, check database
               }
             }
-            return { bucketId: bucket.id, hasAutoDeposit: false }
+            
+            // Check database as fallback or if localStorage is empty
+            try {
+              const autoDeposits = await autoDepositService.getBucketAutoDeposits(bucket.id)
+              const hasDeposits = autoDeposits.length > 0
+              
+              // Update localStorage with the database state
+              if (hasDeposits) {
+                localStorage.setItem(autoDepositsKey, JSON.stringify(autoDeposits))
+              } else {
+                localStorage.removeItem(autoDepositsKey)
+              }
+              
+              return { bucketId: bucket.id, hasAutoDeposit: hasDeposits }
+            } catch {
+              // If database check fails, maintain current state
+              return { bucketId: bucket.id, hasAutoDeposit: autoDepositBuckets.has(bucket.id) }
+            }
           })
         )
         
@@ -355,7 +376,7 @@ function HomePageContent() {
         )
         setAutoDepositBuckets(bucketsWithAutoDeposits)
       }
-    }, 1000) // Check every second
+    }, 5000) // Check every 5 seconds instead of every second
     
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange)

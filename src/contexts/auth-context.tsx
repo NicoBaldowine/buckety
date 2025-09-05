@@ -38,18 +38,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         // Silently initialize authentication
         
-        // Only clear obviously invalid tokens, let Supabase handle token refresh
+        // Handle invalid refresh tokens by clearing auth state
         if (typeof window !== 'undefined') {
-          // Only check for and clear completely corrupted tokens
+          // Clear any invalid Supabase tokens that are causing errors
           Object.keys(localStorage).forEach(key => {
             if (key.startsWith('sb-') && key.includes('auth-token')) {
               try {
                 const tokenData = localStorage.getItem(key)
                 if (tokenData) {
                   const parsed = JSON.parse(tokenData)
-                  // Only clear if there's no refresh token at all (completely invalid)
-                  if (!parsed.refresh_token && !parsed.access_token) {
+                  // Clear if refresh token is missing or expired
+                  if (!parsed.refresh_token || !parsed.access_token) {
                     localStorage.removeItem(key)
+                    console.log('🧹 Cleared invalid auth token:', key)
                   }
                   // Let expired tokens be handled by Supabase refresh mechanism
                 }
@@ -70,13 +71,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       } catch (error) {
         // Handle refresh token errors specifically - silently
-        if (error instanceof Error && 
-            (error.message?.includes('Invalid Refresh Token') || 
-             error.message?.includes('Refresh Token Not Found'))) {
-          // Clear all auth-related localStorage silently
+        if (error instanceof Error && error.message.includes('Refresh Token Not Found')) {
+          console.log('🧹 Clearing invalid session due to refresh token error')
+          // Clear all Supabase auth tokens
           if (typeof window !== 'undefined') {
-            localStorage.removeItem('supabase.auth.token')
-            // Clear any other Supabase auth keys
             Object.keys(localStorage).forEach(key => {
               if (key.startsWith('sb-')) {
                 localStorage.removeItem(key)

@@ -759,25 +759,23 @@ function BucketDetailsContent() {
           )}
           
           <h1 
-            className="text-[14px] max-sm:text-[12px] font-semibold text-black"
-            style={{ letterSpacing: '-0.01em' }}
+            className="text-[20px] sm:text-[32px] font-semibold text-black"
+            style={{ letterSpacing: '-0.03em' }}
           >
             {bucketData.title}
           </h1>
           
           
-          <div className="flex items-baseline mt-1 max-sm:mt-0 max-sm:mb-6">
+          <div className="flex items-baseline mb-4">
             <div className="flex items-baseline gap-1">
               <span 
-                className={`${displayCurrentAmount >= bucketData.targetAmount && bucketData.id !== 'main-bucket' ? 'text-[40px]' : 'text-[32px]'} max-sm:text-[24px] font-semibold text-black`}
-                style={{ letterSpacing: '-0.05em' }}
+                className="text-[24px] font-semibold tracking-tight text-black"
               >
                 ${animatedCurrentAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </span>
               {bucketData.id !== 'main-bucket' && displayCurrentAmount < bucketData.targetAmount && (
                 <span 
-                  className="text-[32px] max-sm:text-[24px] font-semibold text-black/40"
-                  style={{ letterSpacing: '-0.05em' }}
+                  className="text-[24px] font-semibold tracking-tight text-black/40"
                 >
                   of ${bucketData.targetAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </span>

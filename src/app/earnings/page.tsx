@@ -208,19 +208,20 @@ function EarningsContent() {
                 
                 <CartesianGrid 
                   strokeDasharray="0" 
-                  stroke="rgba(255,255,255,0.05)"
+                  stroke="currentColor"
+                  opacity={0.1}
                   vertical={false}
                 />
                 
                 <XAxis 
                   dataKey="month" 
-                  tick={{ fontSize: 11, fill: 'rgba(255,255,255,0.4)' }}
+                  tick={{ fontSize: 11, fill: 'currentColor', opacity: 0.5 }}
                   axisLine={false}
                   tickLine={false}
                 />
                 
                 <YAxis 
-                  tick={{ fontSize: 10, fill: 'rgba(255,255,255,0.4)' }}
+                  tick={{ fontSize: 10, fill: 'currentColor', opacity: 0.5 }}
                   axisLine={false}
                   tickLine={false}
                   tickFormatter={(value) => `$${value}`}

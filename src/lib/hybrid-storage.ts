@@ -1,102 +1,85 @@
-import { bucketService, activityService, mainBucketService, transferService, type Activity } from './supabase'
+import { bucketService, transferService, type Activity } from './supabase'
 
-// Hybrid storage service that combines localStorage for speed + database for persistence
 export class HybridStorage {
-  private static readonly BUCKETS_KEY = 'buckets'
-  private static readonly MAIN_BUCKET_KEY = 'mainBucket'
-  private static readonly USER_ID = '00000000-0000-0000-0000-000000000001' // For now, using a fixed test UUID
+  private static readonly USER_ID = 'demo-user-id'
 
-  // Get user-specific localStorage keys
+  // Get localStorage keys
   private static getBucketsKey(userId?: string): string {
-    return userId ? `buckets_${userId}` : this.BUCKETS_KEY
+    return `buckets_${userId || this.USER_ID}`
   }
 
   private static getMainBucketKey(userId?: string): string {
-    return userId ? `mainBucket_${userId}` : this.MAIN_BUCKET_KEY
+    return `main_bucket_${userId || this.USER_ID}`
   }
 
-  // Load initial data from database to localStorage
-  static async initializeFromDatabase(userId?: string): Promise<void> {
-    if (typeof window === 'undefined') return // Skip on server-side
+  // Get buckets from localStorage
+  static getLocalBuckets(userId?: string): any[] {
     try {
-      // Load buckets from database
-      const buckets = await bucketService.getBuckets(userId)
-      const localBuckets = buckets.map(bucket => ({
-        id: bucket.id,
-        title: bucket.title,
-        currentAmount: bucket.current_amount,
-        targetAmount: bucket.target_amount,
-        backgroundColor: bucket.background_color,
-        apy: bucket.apy,
-        created_at: bucket.created_at,
-        updated_at: bucket.updated_at
-      }))
-      
-      if (localBuckets.length > 0) {
-        localStorage.setItem(this.getBucketsKey(userId), JSON.stringify(localBuckets))
-      }
-
-      // Load main bucket from database (with fallback for RLS issues)
-      try {
-        const mainBucket = await mainBucketService.getMainBucket(userId || this.USER_ID)
-        if (mainBucket) {
-          localStorage.setItem(this.getMainBucketKey(userId), JSON.stringify({
-            currentAmount: mainBucket.current_amount
-          }))
-        } else {
-          // Database returned null (no auth or RLS issue) - use localStorage fallback
-          const existingMainBucket = this.getLocalMainBucket(userId)
-          console.log('Using localStorage fallback for main bucket:', existingMainBucket.currentAmount)
-        }
-      } catch (error) {
-        console.warn('Could not load main bucket from database, using localStorage fallback:', error)
-        // Keep existing localStorage data
-        const existingMainBucket = this.getLocalMainBucket(userId)
-        console.log('Keeping existing main bucket amount:', existingMainBucket.currentAmount)
-      }
-
-      console.log('✅ Initialized from database:', { buckets: localBuckets.length })
+      const buckets = localStorage.getItem(this.getBucketsKey(userId))
+      return buckets ? JSON.parse(buckets) : []
     } catch (error) {
-      console.warn('⚠️ Could not load from database, using localStorage only:', error)
+      console.error('Error reading buckets from localStorage:', error)
+      return []
     }
   }
 
-  // Create a new bucket (hybrid: localStorage + database)
-  static async createBucket(bucketData: {
-    title: string
-    targetAmount: number
-    backgroundColor: string
-    apy: number
-  }, userId?: string): Promise<string | null> {
-    if (typeof window === 'undefined') return null // Skip on server-side
+  // Get main bucket from localStorage
+  static getLocalMainBucket(userId?: string): any {
     try {
-      // 1. Create in database first (to get proper ID and auto-logging)
-      const dbBucket = await bucketService.createBucket({
-        title: bucketData.title,
-        current_amount: 0,
-        target_amount: bucketData.targetAmount,
-        background_color: bucketData.backgroundColor,
-        apy: bucketData.apy,
-        user_id: userId || this.USER_ID
-      })
+      const mainBucket = localStorage.getItem(this.getMainBucketKey(userId))
+      return mainBucket ? JSON.parse(mainBucket) : { currentAmount: 100, title: 'Main Bucket' }
+    } catch (error) {
+      console.error('Error reading main bucket from localStorage:', error)
+      return { currentAmount: 100, title: 'Main Bucket' }
+    }
+  }
 
-      if (!dbBucket) {
-        throw new Error('Failed to create bucket in database')
+  // Update bucket in localStorage
+  static updateLocalBucket(bucketId: string, updates: any, userId?: string): boolean {
+    try {
+      if (bucketId === 'main-bucket') {
+        const mainBucket = this.getLocalMainBucket(userId)
+        if (updates.currentAmount !== undefined) mainBucket.currentAmount = updates.currentAmount
+        if (updates.title !== undefined) mainBucket.title = updates.title
+        localStorage.setItem(this.getMainBucketKey(userId), JSON.stringify(mainBucket))
+        return true
+      } else {
+        const buckets = this.getLocalBuckets(userId)
+        const bucket = buckets.find((b: any) => b.id === bucketId)
+        if (bucket) {
+          if (updates.currentAmount !== undefined) bucket.currentAmount = updates.currentAmount
+          if (updates.targetAmount !== undefined) bucket.targetAmount = updates.targetAmount
+          if (updates.backgroundColor !== undefined) bucket.backgroundColor = updates.backgroundColor
+          if (updates.title !== undefined) bucket.title = updates.title
+          localStorage.setItem(this.getBucketsKey(userId), JSON.stringify(buckets))
+          return true
+        }
       }
+      return false
+    } catch (error) {
+      console.error('Error updating bucket in localStorage:', error)
+      return false
+    }
+  }
 
-      // 2. Add to localStorage for immediate UI update
+  // Create bucket
+  static async createBucket(title: string, targetAmount: number, backgroundColor: string, userId?: string): Promise<string | null> {
+    try {
+      // Create in database first
+      const dbBucket = await bucketService.createBucket(title, targetAmount, backgroundColor, userId || this.USER_ID)
+      if (!dbBucket) return null
+
+      // Add to localStorage
       const buckets = this.getLocalBuckets(userId)
       const newLocalBucket = {
         id: dbBucket.id,
         title: dbBucket.title,
-        currentAmount: dbBucket.current_amount,
+        currentAmount: 0,
         targetAmount: dbBucket.target_amount,
         backgroundColor: dbBucket.background_color,
-        apy: dbBucket.apy,
-        created_at: dbBucket.created_at,
-        updated_at: dbBucket.updated_at
+        apy: 3.5
       }
-      
+
       buckets.push(newLocalBucket)
       localStorage.setItem(this.getBucketsKey(userId), JSON.stringify(buckets))
 
@@ -108,129 +91,126 @@ export class HybridStorage {
     }
   }
 
-  // Transfer money (hybrid: localStorage + database + activity logging)
-  static async transferMoney(
+  // Transfer money (synchronous for instant UI)
+  static transferMoney(
     fromBucketId: string,
     toBucketId: string,
     amount: number,
     userId?: string
-  ): Promise<{ success: boolean; error?: string }> {
-    try {
-      // Handle main bucket transfers
-      if (fromBucketId === 'main-bucket' && toBucketId !== 'main-bucket') {
-        // Transfer from main bucket to savings bucket
-        const buckets = this.getLocalBuckets(userId)
-        const toBucket = buckets.find(b => b.id === toBucketId)
-        
-        if (!toBucket) {
-          return { success: false, error: 'Destination bucket not found' }
-        }
+  ): { success: boolean; error?: string } {
+    if (fromBucketId === 'main-bucket' && toBucketId !== 'main-bucket') {
+      // Transfer from main bucket to savings bucket
+      const buckets = this.getLocalBuckets(userId)
+      const toBucket = buckets.find((b: any) => b.id === toBucketId)
 
-        // Update localStorage immediately
-        toBucket.currentAmount += amount
-        localStorage.setItem(this.getBucketsKey(userId), JSON.stringify(buckets))
-
-        // Update main bucket in localStorage too
-        const mainBucket = this.getLocalMainBucket(userId)
-        mainBucket.currentAmount -= amount
-        localStorage.setItem(this.getMainBucketKey(userId), JSON.stringify(mainBucket))
-
-        // Log transfer activity for main bucket
-        const transferHistory = JSON.parse(localStorage.getItem('main_bucket_transfers') || '[]')
-        transferHistory.unshift({
-          id: `activity-${Date.now()}`,
-          title: `To ${toBucket.title}`,
-          amount: -amount,
-          date: new Date().toISOString().split('T')[0],
-          activity_type: 'money_removed',
-          from_source: 'Main Bucket',
-          to_destination: toBucket.title,
-          bucket_id: 'main-bucket'
-        })
-        // Keep only last 50 activities
-        if (transferHistory.length > 50) transferHistory.pop()
-        localStorage.setItem('main_bucket_transfers', JSON.stringify(transferHistory))
-        localStorage.setItem(`activities_main-bucket`, JSON.stringify(transferHistory))
-
-        // Sync to database
-        await transferService.transferToSavingsBucket(toBucketId, toBucket.currentAmount, amount, userId || this.USER_ID)
-        
-      } else if (fromBucketId !== 'main-bucket' && toBucketId === 'main-bucket') {
-        // Transfer from savings bucket to main bucket
-        const buckets = this.getLocalBuckets(userId)
-        const fromBucket = buckets.find(b => b.id === fromBucketId)
-        
-        if (!fromBucket) {
-          return { success: false, error: 'Source bucket not found' }
-        }
-
-        if (fromBucket.currentAmount < amount) {
-          return { success: false, error: 'Insufficient funds' }
-        }
-
-        // Update localStorage immediately
-        fromBucket.currentAmount -= amount
-        localStorage.setItem(this.getBucketsKey(userId), JSON.stringify(buckets))
-
-        // Update main bucket in localStorage too
-        const mainBucket = this.getLocalMainBucket(userId)
-        mainBucket.currentAmount += amount
-        localStorage.setItem(this.getMainBucketKey(userId), JSON.stringify(mainBucket))
-
-        // Log transfer activity for main bucket (money returned)
-        const transferHistory = JSON.parse(localStorage.getItem('main_bucket_transfers') || '[]')
-        transferHistory.unshift({
-          id: `activity-${Date.now()}`,
-          title: `From ${fromBucket.title}`,
-          amount: amount,
-          date: new Date().toISOString().split('T')[0],
-          activity_type: 'money_added',
-          from_source: fromBucket.title,
-          to_destination: 'Main Bucket',
-          bucket_id: 'main-bucket'
-        })
-        // Keep only last 50 activities
-        if (transferHistory.length > 50) transferHistory.pop()
-        localStorage.setItem('main_bucket_transfers', JSON.stringify(transferHistory))
-        localStorage.setItem(`activities_main-bucket`, JSON.stringify(transferHistory))
-
-        // Sync to database
-        await transferService.transferFromSavingsBucket(fromBucketId, amount, userId || this.USER_ID)
-        
-      } else {
-        // Transfer between savings buckets
-        const buckets = this.getLocalBuckets(userId)
-        const fromBucket = buckets.find(b => b.id === fromBucketId)
-        const toBucket = buckets.find(b => b.id === toBucketId)
-
-        if (!fromBucket || !toBucket) {
-          return { success: false, error: 'Bucket not found' }
-        }
-
-        if (fromBucket.currentAmount < amount) {
-          return { success: false, error: 'Insufficient funds' }
-        }
-
-        // Update localStorage immediately
-        fromBucket.currentAmount -= amount
-        toBucket.currentAmount += amount
-        localStorage.setItem(this.getBucketsKey(userId), JSON.stringify(buckets))
-
-        // Sync to database
-        await bucketService.updateBucket(fromBucketId, { current_amount: fromBucket.currentAmount })
-        await bucketService.updateBucket(toBucketId, { current_amount: toBucket.currentAmount })
-        
-        // Log activities for both buckets
-        await activityService.logMoneyRemoved(fromBucketId, amount, toBucket.title)
-        await activityService.logMoneyAdded(toBucketId, amount, fromBucket.title)
+      if (!toBucket) {
+        return { success: false, error: 'Destination bucket not found' }
       }
 
-      console.log('✅ Transfer completed successfully')
-      return { success: true }
-    } catch (error) {
-      console.error('❌ Transfer error:', error)
-      return { success: false, error: 'Transfer failed' }
+      const mainBucket = this.getLocalMainBucket(userId)
+      if (mainBucket.currentAmount < amount) {
+        return { success: false, error: 'Insufficient funds' }
+      }
+
+      // Update localStorage immediately
+      mainBucket.currentAmount -= amount
+      toBucket.currentAmount += amount
+      localStorage.setItem(this.getMainBucketKey(userId), JSON.stringify(mainBucket))
+      localStorage.setItem(this.getBucketsKey(userId), JSON.stringify(buckets))
+
+      // Log transfer activity for main bucket
+      const transferHistory = JSON.parse(localStorage.getItem('main_bucket_transfers') || '[]')
+      transferHistory.unshift({
+        id: `activity-${Date.now()}`,
+        title: `To ${toBucket.title}`,
+        amount: -amount,
+        date: new Date().toISOString().split('T')[0],
+        activity_type: 'money_removed',
+        from_source: 'Main Bucket',
+        to_destination: toBucket.title,
+        bucket_id: 'main-bucket'
+      })
+      if (transferHistory.length > 50) transferHistory.pop()
+      localStorage.setItem('main_bucket_transfers', JSON.stringify(transferHistory))
+      localStorage.setItem(`activities_main-bucket`, JSON.stringify(transferHistory))
+
+    } else if (fromBucketId !== 'main-bucket' && toBucketId === 'main-bucket') {
+      // Transfer from savings bucket to main bucket
+      const buckets = this.getLocalBuckets(userId)
+      const fromBucket = buckets.find((b: any) => b.id === fromBucketId)
+      
+      if (!fromBucket) {
+        return { success: false, error: 'Source bucket not found' }
+      }
+
+      if (fromBucket.currentAmount < amount) {
+        return { success: false, error: 'Insufficient funds' }
+      }
+
+      // Update localStorage immediately
+      fromBucket.currentAmount -= amount
+      localStorage.setItem(this.getBucketsKey(userId), JSON.stringify(buckets))
+      
+      // Log activity for the source bucket
+      const fromBucketActivities = JSON.parse(localStorage.getItem(`activities_${fromBucketId}`) || '[]')
+      const fromActivity = {
+        id: `activity-${Date.now()}-from`,
+        title: `To Main Bucket`,
+        amount: -amount,
+        date: new Date().toISOString().split('T')[0],
+        activity_type: 'money_removed',
+        from_source: fromBucket.title,
+        to_destination: 'Main Bucket',
+        bucket_id: fromBucketId
+      }
+      fromBucketActivities.unshift(fromActivity)
+      if (fromBucketActivities.length > 50) fromBucketActivities.pop()
+      localStorage.setItem(`activities_${fromBucketId}`, JSON.stringify(fromBucketActivities))
+
+      // Update main bucket
+      const mainBucket = this.getLocalMainBucket(userId)
+      mainBucket.currentAmount += amount
+      localStorage.setItem(this.getMainBucketKey(userId), JSON.stringify(mainBucket))
+
+      // Log transfer activity for main bucket
+      const transferHistory = JSON.parse(localStorage.getItem('main_bucket_transfers') || '[]')
+      const newActivity = {
+        id: `activity-${Date.now()}`,
+        title: `From ${fromBucket.title}`,
+        amount: amount,
+        date: new Date().toISOString().split('T')[0],
+        activity_type: 'money_added',
+        from_source: fromBucket.title,
+        to_destination: 'Main Bucket',
+        bucket_id: 'main-bucket'
+      }
+      transferHistory.unshift(newActivity)
+      if (transferHistory.length > 50) transferHistory.pop()
+      localStorage.setItem('main_bucket_transfers', JSON.stringify(transferHistory))
+      localStorage.setItem(`activities_main-bucket`, JSON.stringify(transferHistory))
+
+    } else {
+      // Transfer between savings buckets
+      const buckets = this.getLocalBuckets(userId)
+      const fromBucket = buckets.find((b: any) => b.id === fromBucketId)
+      const toBucket = buckets.find((b: any) => b.id === toBucketId)
+
+      if (!fromBucket || !toBucket) {
+        return { success: false, error: 'Bucket not found' }
+      }
+
+      if (fromBucket.currentAmount < amount) {
+        return { success: false, error: 'Insufficient funds' }
+      }
+
+      // Update localStorage immediately
+      fromBucket.currentAmount -= amount
+      toBucket.currentAmount += amount
+      localStorage.setItem(this.getBucketsKey(userId), JSON.stringify(buckets))
     }
+
+    console.log('✅ Transfer completed successfully')
+    return { success: true }
   }
 
   // Get bucket activities from database with caching
@@ -250,145 +230,26 @@ export class HybridStorage {
         }
       }
       
-      // Load fresh data from database in background
-      const loadFreshData = async () => {
-        try {
-          let freshActivities: Activity[]
-          if (bucketId === 'main-bucket') {
-            // For main bucket, prioritize database data over localStorage
-            let localActivities: Activity[] = []
-            const transferHistory = localStorage.getItem('main_bucket_transfers') || '[]'
-            try {
-              localActivities = JSON.parse(transferHistory)
-            } catch {
-              localActivities = []
-            }
-            
-            // Try to get from database first with timeout
-            try {
-              console.log('Loading main bucket activities from database...')
-              const dbPromise = activityService.getMainBucketTransferActivities(userId || this.USER_ID)
-              const timeoutPromise = new Promise<Activity[]>((resolve) => {
-                setTimeout(() => {
-                  console.warn('Database query timed out, using localStorage data')
-                  resolve(localActivities)
-                }, 3000) // 3 second timeout
-              })
-              
-              freshActivities = await Promise.race([dbPromise, timeoutPromise])
-              
-              // If database returned empty but localStorage has data, use localStorage
-              if ((!freshActivities || freshActivities.length === 0) && localActivities.length > 0) {
-                console.log('Database returned empty, using localStorage activities:', localActivities.length)
-                freshActivities = localActivities
-              } else if (freshActivities && freshActivities.length > 0) {
-                console.log('Using database activities:', freshActivities.length)
-              }
-            } catch (dbError) {
-              console.warn('Database error, using localStorage activities:', dbError)
-              freshActivities = localActivities
-            }
-            
-            // Ensure we have a fallback
-            if (!freshActivities) {
-              freshActivities = localActivities
-            }
-          } else {
-            freshActivities = await activityService.getActivities(bucketId)
-          }
-          
-          // Cache the fresh data
-          localStorage.setItem(cacheKey, JSON.stringify(freshActivities))
-          return freshActivities
-        } catch (error) {
-          console.error('❌ Error loading fresh activities:', error)
-          return activities // Return cached activities if fresh load fails
-        }
-      }
-      
-      // Always try to get fresh data for main bucket to ensure completeness
-      if (bucketId === 'main-bucket') {
-        console.log('Loading fresh data for main bucket (always fresh load)')
-        return await loadFreshData()
-      } else {
-        // For other buckets, use cached data if available
-        if (activities.length > 0) {
-          // Update cache in background
-          loadFreshData()
-          return activities
-        } else {
-          // No cached data, wait for fresh data
-          return await loadFreshData()
-        }
-      }
+      return activities
     } catch (error) {
-      console.error('❌ Error loading activities:', error)
+      console.error('Error loading activities:', error)
       return []
     }
   }
 
-  // Get buckets from localStorage (for fast UI updates)
-  static getLocalBuckets(userId?: string): { id: string; title: string; currentAmount: number; targetAmount: number; backgroundColor: string; apy: number }[] {
-    if (typeof window === 'undefined') return []
-    const saved = localStorage.getItem(this.getBucketsKey(userId))
-    return saved ? JSON.parse(saved) : []
-  }
-
-  // Get main bucket from localStorage
-  static getLocalMainBucket(userId?: string): { currentAmount: number } {
-    if (typeof window === 'undefined') return { currentAmount: 1200 }
-    const saved = localStorage.getItem(this.getMainBucketKey(userId))
-    return saved ? JSON.parse(saved) : { currentAmount: 1200 }
-  }
-
-  // Update bucket in both localStorage and database
-  static async updateBucket(bucketId: string, updates: {
-    title?: string
-    targetAmount?: number
-    backgroundColor?: string
-    currentAmount?: number
-  }, userId?: string): Promise<boolean> {
-    try {
-      // 1. Update localStorage immediately
-      const buckets = this.getLocalBuckets(userId)
-      const bucket = buckets.find(b => b.id === bucketId)
-      if (bucket) {
-        if (updates.title !== undefined) bucket.title = updates.title
-        if (updates.targetAmount !== undefined) bucket.targetAmount = updates.targetAmount
-        if (updates.backgroundColor !== undefined) bucket.backgroundColor = updates.backgroundColor
-        if (updates.currentAmount !== undefined) bucket.currentAmount = updates.currentAmount
-        
-        localStorage.setItem(this.getBucketsKey(userId), JSON.stringify(buckets))
-      }
-
-      // 2. Sync to database
-      const dbUpdates: Record<string, unknown> = {}
-      if (updates.title !== undefined) dbUpdates.title = updates.title
-      if (updates.targetAmount !== undefined) dbUpdates.target_amount = updates.targetAmount
-      if (updates.backgroundColor !== undefined) dbUpdates.background_color = updates.backgroundColor
-      if (updates.currentAmount !== undefined) dbUpdates.current_amount = updates.currentAmount
-
-      const result = await bucketService.updateBucket(bucketId, dbUpdates)
-      return !!result
-    } catch (error) {
-      console.error('❌ Error updating bucket:', error)
-      return false
-    }
-  }
-
-  // Delete bucket from both localStorage and database
+  // Delete bucket
   static async deleteBucket(bucketId: string, userId?: string): Promise<boolean> {
     try {
-      // 1. Remove from localStorage immediately
       const buckets = this.getLocalBuckets(userId)
-      const filteredBuckets = buckets.filter(b => b.id !== bucketId)
+      const filteredBuckets = buckets.filter((b: any) => b.id !== bucketId)
       localStorage.setItem(this.getBucketsKey(userId), JSON.stringify(filteredBuckets))
-
-      // 2. Delete from database
-      const success = await bucketService.deleteBucket(bucketId)
-      return success
+      
+      // Remove activities
+      localStorage.removeItem(`activities_${bucketId}`)
+      
+      return true
     } catch (error) {
-      console.error('❌ Error deleting bucket:', error)
+      console.error('Error deleting bucket:', error)
       return false
     }
   }

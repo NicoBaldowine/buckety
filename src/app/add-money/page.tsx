@@ -1,7 +1,6 @@
 "use client"
 
 import { Button } from "@/components/ui/button"
-import { Modal } from "@/components/ui/modal"
 import { Select, SelectItem } from "@/components/ui/select"
 import { ProtectedRoute } from "@/components/auth/protected-route"
 import { ArrowLeft, Repeat, ChevronRight, X } from "lucide-react"
@@ -33,11 +32,8 @@ function AddMoneyContent() {
   const { user } = useAuth()
   const [amount, setAmount] = useState("")
   const inputRef = useRef<HTMLInputElement>(null)
-  const [accounts, setAccounts] = useState<Account[]>([])
   const [fromAccount, setFromAccount] = useState<Account | null>(null)
   const [toAccount, setToAccount] = useState<Account | null>(null)
-  const [isModalOpen, setIsModalOpen] = useState(false)
-  const [modalType, setModalType] = useState<'from' | 'to'>('from')
   
   // Auto-deposit states
   const [showAutoDeposit, setShowAutoDeposit] = useState(false)
@@ -48,6 +44,7 @@ function AddMoneyContent() {
   
   const [isTyping, setIsTyping] = useState(false)
   const [hasInsufficientBalance, setHasInsufficientBalance] = useState(false)
+  const [isConverting, setIsConverting] = useState(false)
 
   const formatAmount = (value: string) => {
     const numericValue = value.replace(/[^\d.]/g, '')
@@ -64,6 +61,8 @@ function AddMoneyContent() {
     const value = e.target.value
     setAmount(value)
     setIsTyping(true)
+    // Check balance in real-time while typing
+    checkInsufficientBalance(value)
   }
 
   const checkInsufficientBalance = (amountToCheck: string) => {
@@ -145,115 +144,171 @@ function AddMoneyContent() {
         backgroundColor: bucket.backgroundColor
       }))
     ]
-    setAccounts(allAccounts)
     
-    // Check if we have a 'to' parameter from URL (coming from bucket details)
-    const toBucketId = searchParams?.get('to') || null
+    // Check URL parameters
+    const toBucketId = searchParams?.get('to') || searchParams?.get('toId') || null
+    const fromBucketId = searchParams?.get('fromId') || null
     const showAutoDepositParam = searchParams?.get('showAutoDeposit') || null
+    const urlAmount = searchParams?.get('amount') || null
+    const urlFrequency = searchParams?.get('frequency') || null
+    const urlEndType = searchParams?.get('endType') || null
+    const urlCustomDate = searchParams?.get('customDate') || null
+    
+    // Handle account selection based on URL params
+    let selectedFromAccount: Account | null = null
+    
+    if (fromBucketId) {
+      const fromBucket = allAccounts.find(account => account.id === fromBucketId)
+      if (fromBucket) {
+        setFromAccount(fromBucket)
+        selectedFromAccount = fromBucket
+      }
+    }
     
     if (toBucketId) {
-      const mainBucketAccount = allAccounts.find(account => account.id === 'main-bucket')
       const targetBucket = allAccounts.find(account => account.id === toBucketId)
-      
-      setFromAccount(mainBucketAccount || null)
-      setToAccount(targetBucket || null)
-      
-      // Auto-show auto deposit mode if requested
-      if (showAutoDepositParam === 'true') {
-        setShowAutoDeposit(true)
+      if (targetBucket) {
+        setToAccount(targetBucket)
       }
-    } else {
-      // Default behavior
-      const accountsWithFunds = allAccounts.filter(account => account.currentAmount > 0)
-      const defaultFromAccount = accountsWithFunds.length > 0 
-        ? accountsWithFunds.reduce((max, account) => account.currentAmount > max.currentAmount ? account : max)
-        : allAccounts[0]
       
-      setFromAccount(defaultFromAccount)
-      
-      const availableToAccounts = allAccounts.filter(account => account.id !== defaultFromAccount.id)
-      setToAccount(availableToAccounts[0] || null)
+      // If we have a 'to' param but no 'from' param, default from to main bucket
+      if (!fromBucketId) {
+        const mainBucketAccount = allAccounts.find(account => account.id === 'main-bucket')
+        setFromAccount(mainBucketAccount || null)
+        selectedFromAccount = mainBucketAccount || null
+      }
     }
+    
+    // If neither from nor to is set, use defaults
+    if (!fromBucketId && !toBucketId) {
+      // Always default FROM to Main Bucket
+      const mainBucketAccount = allAccounts.find(account => account.id === 'main-bucket')
+      setFromAccount(mainBucketAccount || null)
+      selectedFromAccount = mainBucketAccount || null
+      
+      // Default TO to the most recently created bucket (last in savedBuckets array)
+      const lastBucket = savedBuckets.length > 0 ? savedBuckets[savedBuckets.length - 1] : null
+      if (lastBucket) {
+        const lastBucketAccount = allAccounts.find(account => account.id === lastBucket.id)
+        setToAccount(lastBucketAccount || null)
+      } else {
+        // If no buckets exist, just pick any non-main bucket account
+        const availableToAccounts = allAccounts.filter(account => account.id !== 'main-bucket')
+        setToAccount(availableToAccounts[0] || null)
+      }
+    }
+    
+    // Restore other state from URL params
+    if (urlAmount) {
+      setAmount(urlAmount)
+      // Check insufficient balance with the restored amount and account
+      if (selectedFromAccount && urlAmount) {
+        const cleanValue = urlAmount.replace(/[^\d.]/g, '')
+        const numericAmount = parseFloat(cleanValue)
+        if (!isNaN(numericAmount) && numericAmount > selectedFromAccount.currentAmount) {
+          setHasInsufficientBalance(true)
+        }
+      }
+    }
+    if (showAutoDepositParam === 'true') setShowAutoDeposit(true)
+    if (urlFrequency) setFrequency(urlFrequency as any)
+    if (urlEndType) setEndType(urlEndType as any)
+    if (urlCustomDate) setCustomDate(urlCustomDate)
   }, [user, searchParams])
 
-  const handleAccountSelect = (account: Account) => {
-    if (modalType === 'from') {
-      setFromAccount(account)
-      if (toAccount && account.id === toAccount.id) {
-        setToAccount(null)
-      }
-    } else {
-      setToAccount(account)
-      if (fromAccount && account.id === fromAccount.id) {
-        setFromAccount(null)
-      }
-    }
-    setIsModalOpen(false)
+
+  const navigateToAccountSelect = (type: 'from' | 'to') => {
+    const params = new URLSearchParams()
+    if (fromAccount) params.set('fromId', fromAccount.id)
+    if (toAccount) params.set('toId', toAccount.id)
+    if (amount) params.set('amount', amount)
+    if (showAutoDeposit) params.set('showAutoDeposit', 'true')
+    if (frequency) params.set('frequency', frequency)
+    if (endType) params.set('endType', endType)
+    if (customDate) params.set('customDate', customDate)
     
-    if (amount) {
-      setTimeout(() => checkInsufficientBalance(amount), 0)
+    const path = type === 'from' ? '/select-from-account' : '/select-to-account'
+    router.push(`${path}?${params.toString()}`)
+  }
+
+  const handleConvert = () => {
+    console.log('🚀 Convert button clicked!')
+    console.log('From:', fromAccount?.title, 'To:', toAccount?.title, 'Amount:', amount)
+    
+    if (!fromAccount || !toAccount || !amount) {
+      console.log('❌ Missing required data:', {fromAccount: !!fromAccount, toAccount: !!toAccount, amount: !!amount})
+      return
     }
-  }
-
-  const openModal = (type: 'from' | 'to') => {
-    setModalType(type)
-    setIsModalOpen(true)
-  }
-
-  const handleConvert = async () => {
-    if (!fromAccount || !toAccount || !amount || hasInsufficientBalance) return
+    if (isConverting) {
+      console.log('❌ Already converting...')
+      return
+    }
 
     const transferAmount = parseFloat(amount.replace(/[^\d.]/g, ''))
-    if (isNaN(transferAmount) || transferAmount <= 0) return
+    if (isNaN(transferAmount) || transferAmount <= 0) {
+      console.log('❌ Invalid amount:', transferAmount)
+      return
+    }
+    
+    // Double-check for insufficient funds before attempting transfer
+    if (transferAmount > fromAccount.currentAmount) {
+      console.log('❌ Insufficient funds:', transferAmount, '>', fromAccount.currentAmount)
+      setHasInsufficientBalance(true)
+      return
+    }
 
-    try {
-      const result = await HybridStorage.transferMoney(fromAccount.id, toAccount.id, transferAmount, user?.id)
+    console.log('✅ Starting transfer...')
+    setIsConverting(true)
+
+    const result = HybridStorage.transferMoney(fromAccount.id, toAccount.id, transferAmount, user?.id)
+    
+    if (!result.success) {
+      console.error('Transfer failed:', result.error)
+      // Check if it's an insufficient funds error and set the state
+      if (result.error?.toLowerCase().includes('insufficient')) {
+        setHasInsufficientBalance(true)
+      }
+      setIsConverting(false)
+      return
+    }
+
+    console.log('✅ Transfer successful!')
+
+    // Since localStorage is updated instantly, navigate immediately
+    // Get fresh data after transfer
+    const destinationBucket = toAccount.id === 'main-bucket' 
+      ? {
+          id: 'main-bucket',
+          title: 'Main Bucket',
+          currentAmount: HybridStorage.getLocalMainBucket(user?.id).currentAmount,
+          targetAmount: 1200,
+          backgroundColor: '#E5E7EB',
+          apy: 0
+        }
+      : HybridStorage.getLocalBuckets(user?.id).find((b: { id: string }) => b.id === toAccount.id)
+    
+    if (destinationBucket) {
+      const params = new URLSearchParams({
+        id: destinationBucket.id || '',
+        title: destinationBucket.title || '',
+        currentAmount: (destinationBucket.currentAmount || 0).toString(),
+        targetAmount: (destinationBucket.targetAmount || 0).toString(),
+        backgroundColor: destinationBucket.backgroundColor || '#ffffff',
+        apy: (destinationBucket.apy || 0).toString(),
+        fromTransfer: 'true',
+        transferAmount: transferAmount.toString(),
+        fromSource: fromAccount.title || 'Main Bucket'
+      })
       
-      if (!result.success) {
-        console.error('Transfer failed:', result.error)
-        return
+      // Set navigation context so back button goes to home
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem('navigation_context', 'fromTransfer')
       }
-
-      console.log('✅ Transfer successful!')
-
-      // Navigate to destination bucket details
-      if (toAccount.id !== 'main-bucket') {
-        const localBuckets = HybridStorage.getLocalBuckets(user?.id)
-        const bucket = localBuckets.find((b: { id: string }) => b.id === toAccount.id)
-        
-        if (bucket) {
-          const params = new URLSearchParams({
-            id: bucket.id || '',
-            title: bucket.title || '',
-            currentAmount: (bucket.currentAmount || 0).toString(),
-            targetAmount: (bucket.targetAmount || 0).toString(),
-            backgroundColor: bucket.backgroundColor || '#ffffff',
-            apy: (bucket.apy || 0).toString(),
-            fromTransfer: 'true',
-            transferAmount: transferAmount.toString(),
-            fromSource: fromAccount.title || 'Main Bucket'
-          })
-          console.log('💰 Navigating to bucket details after transfer with params:', Object.fromEntries(params.entries()))
-          
-          // Also set navigation context in sessionStorage as backup
-          if (typeof window !== 'undefined') {
-            sessionStorage.setItem('navigation_context', 'fromTransfer')
-          }
-          
-          router.push(`/bucket-details?${params.toString()}`)
-        }
-      } else {
-        console.log('🏠 Transfer to main bucket, going to home')
-        
-        // Clear navigation context
-        if (typeof window !== 'undefined') {
-          sessionStorage.removeItem('navigation_context')
-        }
-        
-        router.push('/home')
-      }
-    } catch (error) {
-      console.error('Transfer error:', error)
+      
+      // Navigate immediately since data is already updated in localStorage
+      router.push(`/bucket-details?${params.toString()}`)
+    } else {
+      router.push('/home')
     }
   }
 
@@ -396,7 +451,7 @@ function AddMoneyContent() {
           {/* Move from */}
           <button 
             className="flex items-center justify-between py-4 px-4 border-b border-foreground/10 w-full text-left hover:bg-foreground/5 transition-colors"
-            onClick={() => openModal('from')}
+            onClick={() => navigateToAccountSelect('from')}
           >
             <div>
               <h4 className="text-[16px] font-semibold text-foreground" style={{ letterSpacing: '-0.03em' }}>
@@ -417,7 +472,7 @@ function AddMoneyContent() {
           {/* Move to */}
           <button 
             className="flex items-center justify-between py-4 px-4 border-b border-foreground/10 w-full text-left hover:bg-foreground/5 transition-colors"
-            onClick={() => openModal('to')}
+            onClick={() => navigateToAccountSelect('to')}
           >
             <div>
               <h4 className="text-[16px] font-semibold text-foreground" style={{ letterSpacing: '-0.03em' }}>
@@ -580,10 +635,10 @@ function AddMoneyContent() {
               </Button>
               <Button 
                 variant="primary"
-                disabled={!amount || parseFloat(amount) <= 0 || hasInsufficientBalance}
+                disabled={!amount || parseFloat(amount) <= 0 || hasInsufficientBalance || isConverting}
                 onClick={handleConvert}
               >
-                Convert
+                {isConverting ? 'Converting...' : 'Convert'}
               </Button>
             </>
           )}
@@ -631,65 +686,16 @@ function AddMoneyContent() {
               </Button>
               <Button 
                 variant="primary"
-                disabled={!amount || parseFloat(amount) <= 0 || hasInsufficientBalance}
+                disabled={!amount || parseFloat(amount) <= 0 || hasInsufficientBalance || isConverting}
                 onClick={handleConvert}
               >
-                Convert
+                {isConverting ? 'Converting...' : 'Convert'}
               </Button>
             </>
           )}
         </div>
       </div>
 
-      {/* Account Selection Modal */}
-      <Modal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        title={modalType === 'from' ? 'Move from' : 'Move to'}
-      >
-        <div>
-          {accounts
-            .filter((account) => {
-              if (modalType === 'from') {
-                return !toAccount || account.id !== toAccount.id
-              } else {
-                return !fromAccount || account.id !== fromAccount.id
-              }
-            })
-            .map((account) => {
-              const isFromDisabled = modalType === 'from' && account.currentAmount <= 0
-              const isToDisabled = modalType === 'to' && !!account.targetAmount && account.currentAmount >= account.targetAmount
-              const isDisabled = isFromDisabled || isToDisabled
-              return (
-                <button
-                  key={account.id}
-                  onClick={() => !isDisabled && handleAccountSelect(account)}
-                  disabled={isDisabled}
-                  className={`flex items-center justify-between py-4 px-4 border-b border-foreground/10 w-full text-left transition-colors ${
-                    isDisabled 
-                      ? 'opacity-50 cursor-not-allowed' 
-                      : 'hover:bg-foreground/5 cursor-pointer'
-                  }`}
-                >
-                  <div>
-                    <h4 className="text-[16px] font-semibold text-foreground" style={{ letterSpacing: '-0.03em' }}>
-                      {account.title}
-                    </h4>
-                    <p className="text-[14px] font-medium text-foreground/50 mt-1" style={{ letterSpacing: '-0.03em' }}>
-                      {account.id === 'main-bucket' ? 'Main account' : 'Savings bucket'}
-                    </p>
-                  </div>
-                  <div className="text-[16px] font-semibold text-foreground" style={{ letterSpacing: '-0.03em' }}>
-                    {account.targetAmount 
-                      ? `$${account.currentAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} of $${account.targetAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-                      : `$${account.currentAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-                    }
-                  </div>
-                </button>
-              )
-            })}
-        </div>
-      </Modal>
     </div>
   )
 }
