@@ -165,12 +165,12 @@ function CreateBucketContent() {
         })
         router.push(`/bucket-details?${params.toString()}`)
       } else {
-        const bucketId = await HybridStorage.createBucket({
-          title: bucketName,
-          targetAmount: parsedAmount,
-          backgroundColor: selectedColor,
-          apy: 3.5 // Default APY for new buckets
-        }, effectiveUser.id)
+        const bucketId = await HybridStorage.createBucket(
+          bucketName,
+          parsedAmount,
+          selectedColor,
+          effectiveUser.id
+        )
         
         if (bucketId) {
           console.log('✅ Bucket created successfully:', bucketName, 'with ID:', bucketId)

@@ -382,7 +382,7 @@ function HomePageContent() {
       document.removeEventListener('visibilitychange', handleVisibilityChange)
       clearInterval(interval)
     }
-  }, [user, buckets])
+  }, [user, buckets, autoDepositBuckets])
 
   // Listen for localStorage changes (e.g., when buckets are deleted)
   useEffect(() => {

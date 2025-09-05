@@ -1,4 +1,4 @@
-import { bucketService, transferService, type Activity } from './supabase'
+import { bucketService, type Activity } from './supabase'
 
 export class HybridStorage {
   private static readonly USER_ID = 'demo-user-id'
@@ -13,7 +13,7 @@ export class HybridStorage {
   }
 
   // Get buckets from localStorage
-  static getLocalBuckets(userId?: string): any[] {
+  static getLocalBuckets(userId?: string): Array<{id: string; title: string; currentAmount: number; targetAmount: number; backgroundColor: string; apy: number}> {
     try {
       const buckets = localStorage.getItem(this.getBucketsKey(userId))
       return buckets ? JSON.parse(buckets) : []
@@ -24,7 +24,7 @@ export class HybridStorage {
   }
 
   // Get main bucket from localStorage
-  static getLocalMainBucket(userId?: string): any {
+  static getLocalMainBucket(userId?: string): {currentAmount: number; title: string} {
     try {
       const mainBucket = localStorage.getItem(this.getMainBucketKey(userId))
       return mainBucket ? JSON.parse(mainBucket) : { currentAmount: 100, title: 'Main Bucket' }
@@ -35,7 +35,7 @@ export class HybridStorage {
   }
 
   // Update bucket in localStorage
-  static updateLocalBucket(bucketId: string, updates: any, userId?: string): boolean {
+  static updateLocalBucket(bucketId: string, updates: {currentAmount?: number; targetAmount?: number; backgroundColor?: string; title?: string}, userId?: string): boolean {
     try {
       if (bucketId === 'main-bucket') {
         const mainBucket = this.getLocalMainBucket(userId)
@@ -45,7 +45,7 @@ export class HybridStorage {
         return true
       } else {
         const buckets = this.getLocalBuckets(userId)
-        const bucket = buckets.find((b: any) => b.id === bucketId)
+        const bucket = buckets.find((b: {id: string; currentAmount: number; targetAmount: number; backgroundColor: string; title: string}) => b.id === bucketId)
         if (bucket) {
           if (updates.currentAmount !== undefined) bucket.currentAmount = updates.currentAmount
           if (updates.targetAmount !== undefined) bucket.targetAmount = updates.targetAmount
@@ -66,7 +66,14 @@ export class HybridStorage {
   static async createBucket(title: string, targetAmount: number, backgroundColor: string, userId?: string): Promise<string | null> {
     try {
       // Create in database first
-      const dbBucket = await bucketService.createBucket(title, targetAmount, backgroundColor, userId || this.USER_ID)
+      const dbBucket = await bucketService.createBucket({
+        title,
+        target_amount: targetAmount,
+        background_color: backgroundColor,
+        user_id: userId || this.USER_ID,
+        current_amount: 0,
+        apy: 3.5
+      })
       if (!dbBucket) return null
 
       // Add to localStorage
@@ -101,7 +108,7 @@ export class HybridStorage {
     if (fromBucketId === 'main-bucket' && toBucketId !== 'main-bucket') {
       // Transfer from main bucket to savings bucket
       const buckets = this.getLocalBuckets(userId)
-      const toBucket = buckets.find((b: any) => b.id === toBucketId)
+      const toBucket = buckets.find((b: {id: string; currentAmount: number; targetAmount: number; backgroundColor: string; title: string}) => b.id === toBucketId)
 
       if (!toBucket) {
         return { success: false, error: 'Destination bucket not found' }
@@ -137,7 +144,7 @@ export class HybridStorage {
     } else if (fromBucketId !== 'main-bucket' && toBucketId === 'main-bucket') {
       // Transfer from savings bucket to main bucket
       const buckets = this.getLocalBuckets(userId)
-      const fromBucket = buckets.find((b: any) => b.id === fromBucketId)
+      const fromBucket = buckets.find((b: {id: string; currentAmount: number; targetAmount: number; backgroundColor: string; title: string}) => b.id === fromBucketId)
       
       if (!fromBucket) {
         return { success: false, error: 'Source bucket not found' }
@@ -192,8 +199,8 @@ export class HybridStorage {
     } else {
       // Transfer between savings buckets
       const buckets = this.getLocalBuckets(userId)
-      const fromBucket = buckets.find((b: any) => b.id === fromBucketId)
-      const toBucket = buckets.find((b: any) => b.id === toBucketId)
+      const fromBucket = buckets.find((b: {id: string; currentAmount: number; targetAmount: number; backgroundColor: string; title: string}) => b.id === fromBucketId)
+      const toBucket = buckets.find((b: {id: string; currentAmount: number; targetAmount: number; backgroundColor: string; title: string}) => b.id === toBucketId)
 
       if (!fromBucket || !toBucket) {
         return { success: false, error: 'Bucket not found' }
@@ -214,7 +221,7 @@ export class HybridStorage {
   }
 
   // Get bucket activities from database with caching
-  static async getBucketActivities(bucketId: string, userId?: string): Promise<Activity[]> {
+  static async getBucketActivities(bucketId: string): Promise<Activity[]> {
     try {
       // Try to load from cache first
       const cacheKey = `activities_${bucketId}`
@@ -241,7 +248,7 @@ export class HybridStorage {
   static async deleteBucket(bucketId: string, userId?: string): Promise<boolean> {
     try {
       const buckets = this.getLocalBuckets(userId)
-      const filteredBuckets = buckets.filter((b: any) => b.id !== bucketId)
+      const filteredBuckets = buckets.filter((b: {id: string}) => b.id !== bucketId)
       localStorage.setItem(this.getBucketsKey(userId), JSON.stringify(filteredBuckets))
       
       // Remove activities

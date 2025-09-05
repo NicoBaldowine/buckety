@@ -261,7 +261,7 @@ function BucketDetailsContent() {
           }
           
           // Load fresh data with user context
-          const bucketActivities = await HybridStorage.getBucketActivities(bucketData.id, user.id)
+          const bucketActivities = await HybridStorage.getBucketActivities(bucketData.id)
           setActivities(bucketActivities)
         } catch (error) {
           console.error('Error loading activities:', error)

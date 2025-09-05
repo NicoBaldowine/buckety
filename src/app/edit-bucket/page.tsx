@@ -146,7 +146,7 @@ function EditBucketContent() {
         }
       } else {
         // Use hybrid storage to update both localStorage and database
-        const success = await HybridStorage.updateBucket(bucketId, {
+        const success = HybridStorage.updateLocalBucket(bucketId, {
           title: bucketName,
           targetAmount: parsedAmount,
           backgroundColor: selectedColor

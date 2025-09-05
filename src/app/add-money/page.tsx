@@ -211,8 +211,8 @@ function AddMoneyContent() {
       }
     }
     if (showAutoDepositParam === 'true') setShowAutoDeposit(true)
-    if (urlFrequency) setFrequency(urlFrequency as any)
-    if (urlEndType) setEndType(urlEndType as any)
+    if (urlFrequency) setFrequency(urlFrequency as 'daily' | 'weekly' | 'biweekly' | 'monthly')
+    if (urlEndType) setEndType(urlEndType as 'bucket_completed' | 'custom_date')
     if (urlCustomDate) setCustomDate(urlCustomDate)
   }, [user, searchParams])
 
