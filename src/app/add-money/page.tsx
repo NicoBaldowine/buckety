@@ -34,6 +34,7 @@ function AddMoneyContent() {
   const inputRef = useRef<HTMLInputElement>(null)
   const [fromAccount, setFromAccount] = useState<Account | null>(null)
   const [toAccount, setToAccount] = useState<Account | null>(null)
+  const [originalSource, setOriginalSource] = useState<string>('/home')
   
   // Auto-deposit states
   const [showAutoDeposit, setShowAutoDeposit] = useState(false)
@@ -153,6 +154,31 @@ function AddMoneyContent() {
     const urlFrequency = searchParams?.get('frequency') || null
     const urlEndType = searchParams?.get('endType') || null
     const urlCustomDate = searchParams?.get('customDate') || null
+    const sourceParam = searchParams?.get('source') || null
+    
+    // Determine original navigation source
+    if (sourceParam) {
+      // If explicitly provided in URL
+      setOriginalSource(sourceParam)
+    } else if (toBucketId && toBucketId !== 'main-bucket') {
+      // If navigating to a specific bucket, likely came from bucket-details
+      setOriginalSource(`/bucket-details?id=${toBucketId}`)
+    } else {
+      // Check session storage for navigation context
+      const navContext = sessionStorage.getItem('navigation_context')
+      if (navContext === 'fromBucketDetails') {
+        // Try to get the bucket details from search params or default to home
+        const bucketId = toBucketId || sessionStorage.getItem('last_viewed_bucket')
+        if (bucketId) {
+          setOriginalSource(`/bucket-details?id=${bucketId}`)
+        } else {
+          setOriginalSource('/home')
+        }
+      } else {
+        // Default to home
+        setOriginalSource('/home')
+      }
+    }
     
     // Handle account selection based on URL params
     let selectedFromAccount: Account | null = null
@@ -226,6 +252,7 @@ function AddMoneyContent() {
     if (frequency) params.set('frequency', frequency)
     if (endType) params.set('endType', endType)
     if (customDate) params.set('customDate', customDate)
+    if (originalSource !== '/home') params.set('source', originalSource)
     
     const path = type === 'from' ? '/select-from-account' : '/select-to-account'
     router.push(`${path}?${params.toString()}`)
@@ -439,7 +466,7 @@ function AddMoneyContent() {
           <Button 
             variant="secondary-icon" 
             icon={<ArrowLeft />} 
-            onClick={() => router.back()}
+            onClick={() => router.push(originalSource)}
           />
         </div>
 
@@ -522,7 +549,7 @@ function AddMoneyContent() {
 
           {/* Insufficient Balance Error */}
           {hasInsufficientBalance && (
-            <div className="mt-4 text-center">
+            <div className="mt-2 text-center">
               <p className="text-red-500 text-[16px] font-semibold" style={{ letterSpacing: '-0.03em' }}>
                 Insufficient balance
               </p>

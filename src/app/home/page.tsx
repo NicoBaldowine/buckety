@@ -141,6 +141,18 @@ function HomePageContent() {
     const initializeData = async () => {
       
       try {
+        // Execute any pending auto-deposits first
+        if (user?.id) {
+          try {
+            const result = await autoDepositService.executeAutoDeposits(user.id)
+            if (result.executed > 0) {
+              console.log(`✅ Executed ${result.executed} auto-deposits`)
+            }
+          } catch (error) {
+            console.warn('Auto-deposit execution not available:', error)
+          }
+        }
+        
         // Load user's buckets directly from database
         const userBuckets = await bucketService.getBuckets(user?.id || '')
         
@@ -157,25 +169,27 @@ function HomePageContent() {
           
           setBuckets(transformedBuckets)
           
-          // Check for auto deposits for each bucket (localStorage first, then database)
+          // Check for auto deposits for each bucket (database first for accuracy)
           const autoDepositChecks = await Promise.all(
             userBuckets.map(async (bucket) => {
-              // First check localStorage
-              const autoDepositsKey = `auto_deposits_${bucket.id}`
-              const localAutoDeposits = localStorage.getItem(autoDepositsKey)
-              
-              if (localAutoDeposits) {
-                try {
-                  const deposits = JSON.parse(localAutoDeposits)
-                  return { bucketId: bucket.id, hasAutoDeposit: Array.isArray(deposits) && deposits.length > 0 }
-                } catch {
-                  // If parse fails, check database
+              try {
+                // Always check database first for accurate state
+                const autoDeposits = await autoDepositService.getBucketAutoDeposits(bucket.id)
+                const hasAutoDeposit = autoDeposits.length > 0
+                
+                // Update localStorage to match database state
+                const autoDepositsKey = `auto_deposits_${bucket.id}`
+                if (hasAutoDeposit) {
+                  localStorage.setItem(autoDepositsKey, JSON.stringify(autoDeposits))
+                } else {
+                  localStorage.removeItem(autoDepositsKey)
                 }
+                
+                return { bucketId: bucket.id, hasAutoDeposit }
+              } catch (error) {
+                console.warn(`Error checking auto deposits for bucket ${bucket.id}:`, error)
+                return { bucketId: bucket.id, hasAutoDeposit: false }
               }
-              
-              // If no localStorage or parse failed, check database
-              const autoDeposits = await autoDepositService.getBucketAutoDeposits(bucket.id)
-              return { bucketId: bucket.id, hasAutoDeposit: autoDeposits.length > 0 }
             })
           )
           
@@ -248,12 +262,66 @@ function HomePageContent() {
     }
   }, [buckets, user])
 
-  // Calculate total balance whenever buckets change
+  // Total balance should always be $1200 (initial amount for all users)
+  // Money just moves between buckets, total never changes
   useEffect(() => {
-    const bucketsTotal = buckets.reduce((sum, bucket) => sum + bucket.currentAmount, 0)
-    const total = mainBucketAmount + bucketsTotal
-    setTotalBalance(total)
-  }, [buckets, mainBucketAmount])
+    setTotalBalance(1200)
+  }, [])
+  
+  // Check and execute auto-deposits periodically (once when app opens)
+  useEffect(() => {
+    if (!user?.id) return
+    
+    const checkAutoDeposits = async () => {
+      // Check if we've already executed today
+      const lastExecutionKey = `last_auto_deposit_check_${user.id}`
+      const lastExecution = localStorage.getItem(lastExecutionKey)
+      const today = new Date().toISOString().split('T')[0]
+      
+      if (lastExecution === today) {
+        console.log('Auto-deposits already checked today')
+        return
+      }
+      
+      try {
+        const result = await autoDepositService.executeAutoDeposits(user.id)
+        if (result.executed > 0) {
+          console.log(`✅ Executed ${result.executed} auto-deposits`)
+          // Refresh buckets to show updated amounts
+          const userBuckets = await bucketService.getBuckets(user.id)
+          if (userBuckets.length > 0) {
+            const transformedBuckets = userBuckets.map(bucket => ({
+              id: bucket.id,
+              title: bucket.title,
+              currentAmount: bucket.current_amount,
+              targetAmount: bucket.target_amount,
+              backgroundColor: bucket.background_color,
+              apy: bucket.apy
+            }))
+            setBuckets(transformedBuckets)
+            // Update localStorage
+            localStorage.setItem(`buckets_${user.id}`, JSON.stringify(transformedBuckets))
+          }
+        }
+        // Mark as checked for today
+        localStorage.setItem(lastExecutionKey, today)
+      } catch (error) {
+        console.warn('Failed to check auto-deposits:', error)
+      }
+    }
+    
+    // Check on mount and when becoming visible
+    checkAutoDeposits()
+    
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        checkAutoDeposits()
+      }
+    }
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
+  }, [user])
 
   // Refresh buckets when returning from other pages (user-specific)
   useEffect(() => {
@@ -285,25 +353,27 @@ function HomePageContent() {
             
             setBuckets(transformedBuckets)
             
-            // Also refresh auto deposit status (localStorage first, then database)
+            // Also refresh auto deposit status (database first for accuracy)
             const autoDepositChecks = await Promise.all(
               userBuckets.map(async (bucket) => {
-                // First check localStorage
-                const autoDepositsKey = `auto_deposits_${bucket.id}`
-                const localAutoDeposits = localStorage.getItem(autoDepositsKey)
-                
-                if (localAutoDeposits) {
-                  try {
-                    const deposits = JSON.parse(localAutoDeposits)
-                    return { bucketId: bucket.id, hasAutoDeposit: Array.isArray(deposits) && deposits.length > 0 }
-                  } catch {
-                    // If parse fails, check database
+                try {
+                  // Always check database first for accurate state
+                  const autoDeposits = await autoDepositService.getBucketAutoDeposits(bucket.id)
+                  const hasAutoDeposit = autoDeposits.length > 0
+                  
+                  // Update localStorage to match database state
+                  const autoDepositsKey = `auto_deposits_${bucket.id}`
+                  if (hasAutoDeposit) {
+                    localStorage.setItem(autoDepositsKey, JSON.stringify(autoDeposits))
+                  } else {
+                    localStorage.removeItem(autoDepositsKey)
                   }
+                  
+                  return { bucketId: bucket.id, hasAutoDeposit }
+                } catch (error) {
+                  console.warn(`Error refreshing auto deposits for bucket ${bucket.id}:`, error)
+                  return { bucketId: bucket.id, hasAutoDeposit: false }
                 }
-                
-                // If no localStorage or parse failed, check database
-                const autoDeposits = await autoDepositService.getBucketAutoDeposits(bucket.id)
-                return { bucketId: bucket.id, hasAutoDeposit: autoDeposits.length > 0 }
               })
             )
             
@@ -328,41 +398,36 @@ function HomePageContent() {
     
     document.addEventListener('visibilitychange', handleVisibilityChange)
     
+    // Also listen for window focus to immediately refresh auto deposit status
+    const handleWindowFocus = () => {
+      if (user) {
+        handleVisibilityChange()
+      }
+    }
+    window.addEventListener('focus', handleWindowFocus)
+    
     // Also check auto deposits periodically to catch cancellations
-    // Only check every 5 seconds to avoid flashing, and check both localStorage and database
+    // Check database every 5 seconds for accurate state
     const interval = setInterval(async () => {
       if (buckets.length > 0 && user) {
         const autoDepositChecks = await Promise.all(
           buckets.map(async (bucket) => {
-            const autoDepositsKey = `auto_deposits_${bucket.id}`
-            const localAutoDeposits = localStorage.getItem(autoDepositsKey)
-            
-            if (localAutoDeposits) {
-              try {
-                const deposits = JSON.parse(localAutoDeposits)
-                // Only return true if we have valid deposits
-                if (Array.isArray(deposits) && deposits.length > 0) {
-                  return { bucketId: bucket.id, hasAutoDeposit: true }
-                }
-              } catch {
-                // Parse failed, check database
-              }
-            }
-            
-            // Check database as fallback or if localStorage is empty
             try {
+              // Always check database first for most accurate state
               const autoDeposits = await autoDepositService.getBucketAutoDeposits(bucket.id)
-              const hasDeposits = autoDeposits.length > 0
+              const hasAutoDeposit = autoDeposits.length > 0
               
-              // Update localStorage with the database state
-              if (hasDeposits) {
+              // Keep localStorage in sync with database
+              const autoDepositsKey = `auto_deposits_${bucket.id}`
+              if (hasAutoDeposit) {
                 localStorage.setItem(autoDepositsKey, JSON.stringify(autoDeposits))
               } else {
                 localStorage.removeItem(autoDepositsKey)
               }
               
-              return { bucketId: bucket.id, hasAutoDeposit: hasDeposits }
-            } catch {
+              return { bucketId: bucket.id, hasAutoDeposit }
+            } catch (error) {
+              console.warn(`Error checking auto deposits for bucket ${bucket.id}:`, error)
               // If database check fails, maintain current state
               return { bucketId: bucket.id, hasAutoDeposit: autoDepositBuckets.has(bucket.id) }
             }
@@ -380,6 +445,7 @@ function HomePageContent() {
     
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange)
+      window.removeEventListener('focus', handleWindowFocus)
       clearInterval(interval)
     }
   }, [user, buckets, autoDepositBuckets])
@@ -468,7 +534,7 @@ function HomePageContent() {
               <Button variant="primary" onClick={() => router.push('/create-bucket')}>
                 Create bucket
               </Button>
-              <Button variant="secondary" onClick={() => router.push('/add-money')}>
+              <Button variant="secondary" onClick={() => router.push('/add-money?source=/home')}>
                 Move money
               </Button>
             </div>
@@ -571,10 +637,11 @@ function HomePageContent() {
             <div className="ml-4">
               <Button 
                 variant="secondary"
-                onClick={() => {
-                  // Handle add balance action - placeholder
+                onClick={(e) => {
+                  e.stopPropagation() // Prevent card click
+                  // Navigate to add funds page
+                  router.push('/add-money?source=/home')
                 }}
-                className="text-[14px] font-medium border border-foreground/20"
               >
                 Add funds
               </Button>

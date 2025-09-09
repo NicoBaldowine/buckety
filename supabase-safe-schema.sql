@@ -5,6 +5,7 @@
 DO $$ BEGIN
     CREATE TYPE activity_type AS ENUM (
       'bucket_created',
+      'bucket_completed',
       'money_added',
       'money_removed', 
       'withdrawal',

@@ -85,6 +85,7 @@ export async function getCurrentUserId(): Promise<string | null> {
 // Types for our database tables
 export type ActivityType = 
   | 'bucket_created'
+  | 'bucket_completed'
   | 'money_added'
   | 'money_removed'
   | 'withdrawal'
@@ -140,8 +141,37 @@ export interface AutoDeposit {
   updated_at: string
 }
 
+export interface UserPreferences {
+  id: string
+  user_id: string
+  theme: 'light' | 'dark' | 'system'
+  created_at: string
+  updated_at: string
+}
+
 // Database functions
 export const bucketService = {
+  // Get a single bucket by ID
+  async getBucket(bucketId: string): Promise<Bucket | null> {
+    try {
+      const { data, error } = await supabase
+        .from('buckets')
+        .select('*')
+        .eq('id', bucketId)
+        .single()
+      
+      if (error) {
+        console.error('Error fetching bucket:', error)
+        return null
+      }
+      
+      return data
+    } catch (error) {
+      console.error('Error fetching bucket:', error)
+      return null
+    }
+  },
+  
   // Get all buckets for a user
   async getBuckets(userId?: string): Promise<Bucket[]> {
     try {
@@ -215,32 +245,66 @@ export const bucketService = {
 
   // Update a bucket
   async updateBucket(id: string, updates: Partial<Bucket>): Promise<Bucket | null> {
-    console.log('Attempting to update bucket:', { id, updates })
-    
-    const { data, error } = await supabase
-      .from('buckets')
-      .update({ ...updates, updated_at: new Date().toISOString() })
-      .eq('id', id)
-      .select()
-      .single()
-    
-    if (error) {
-      console.error('Error updating bucket:', {
-        error,
-        errorDetails: {
-          message: error.message,
-          code: error.code,
-          details: error.details,
-          hint: error.hint
-        },
-        bucketId: id,
-        updates
+    try {
+      console.log('🔧 Attempting to update bucket:', { id, updates })
+      
+      // Check authentication first
+      const { data: { user } } = await supabase.auth.getUser()
+      console.log('👤 User authenticated for bucket update:', {
+        isAuthenticated: !!user,
+        userId: user?.id
       })
+      
+      if (!user?.id) {
+        console.error('❌ No authenticated user found for bucket update')
+        return null
+      }
+      
+      const updateData = { 
+        ...updates, 
+        updated_at: new Date().toISOString() 
+      }
+      
+      console.log('📝 Update data being sent to Supabase:', updateData)
+      
+      const { data, error } = await supabase
+        .from('buckets')
+        .update(updateData)
+        .eq('id', id)
+        .select()
+        .single()
+      
+      if (error) {
+        console.error('❌ Error updating bucket:', {
+          error,
+          errorDetails: {
+            message: error.message,
+            code: error.code,
+            details: error.details,
+            hint: error.hint
+          },
+          bucketId: id,
+          updates,
+          updateData
+        })
+        
+        // Check for common issues
+        if (error.message?.includes('permission denied') || error.message?.includes('RLS')) {
+          console.error('💡 Permission denied on bucket update. Check RLS policies and user authentication.')
+        }
+        if (error.message?.includes('JWT')) {
+          console.error('💡 JWT token issue. User may not be properly authenticated.')
+        }
+        
+        return null
+      }
+      
+      console.log('✅ Bucket updated successfully in database:', data)
+      return data
+    } catch (error) {
+      console.error('❌ Unexpected error updating bucket:', error)
       return null
     }
-    
-    console.log('Bucket updated successfully:', data)
-    return data
   },
 
   // Delete a bucket
@@ -430,6 +494,51 @@ export const mainBucketService = {
     }
   },
 
+  // Transfer money from main bucket to a savings bucket
+  async transferFromMainBucket(userId: string, toBucketId: string, amount: number): Promise<{ success: boolean; error?: string }> {
+    try {
+      // Get current main bucket balance
+      const mainBucket = await this.getMainBucket(userId)
+      if (!mainBucket) {
+        // Create main bucket if it doesn't exist
+        const { data, error } = await supabase
+          .from('main_bucket')
+          .insert({ user_id: userId, current_amount: 1200 })
+          .select()
+          .single()
+        
+        if (error) {
+          return { success: false, error: 'Failed to access main bucket' }
+        }
+        
+        if (data && data.current_amount < amount) {
+          return { success: false, error: 'Insufficient funds in main bucket' }
+        }
+      } else if (mainBucket.current_amount < amount) {
+        return { success: false, error: 'Insufficient funds in main bucket' }
+      }
+      
+      // Get destination bucket
+      const toBucket = await bucketService.getBucket(toBucketId)
+      if (!toBucket) {
+        return { success: false, error: 'Destination bucket not found' }
+      }
+      
+      // Update main bucket balance
+      const newMainBalance = (mainBucket?.current_amount || 1200) - amount
+      await this.updateMainBucket(userId, newMainBalance)
+      
+      // Update destination bucket balance
+      const newBucketBalance = toBucket.current_amount + amount
+      await bucketService.updateBucket(toBucketId, { current_amount: newBucketBalance })
+      
+      return { success: true }
+    } catch (error) {
+      console.error('Error transferring from main bucket:', error)
+      return { success: false, error: 'Transfer failed' }
+    }
+  },
+  
   // Update main bucket amount
   async updateMainBucket(userId: string, amount: number): Promise<MainBucket | null> {
     try {
@@ -628,6 +737,16 @@ export const autoDepositService = {
   async createAutoDeposit(autoDeposit: Omit<AutoDeposit, 'id' | 'created_at' | 'updated_at'>): Promise<AutoDeposit | null> {
     try {
       console.log('🚀 Creating auto deposit with data:', autoDeposit)
+      console.log('🔑 Current user ID:', await getCurrentUserId())
+      console.log('🔗 Supabase client initialized:', !!supabase)
+      
+      // Check if user is authenticated before making the request
+      const { data: { user } } = await supabase.auth.getUser()
+      console.log('👤 User authentication status:', {
+        isAuthenticated: !!user,
+        userId: user?.id,
+        userRole: user?.role
+      })
       
       const { data, error } = await supabase
         .from('auto_deposits')
@@ -637,14 +756,22 @@ export const autoDepositService = {
       
       if (error) {
         console.error('❌ Error creating auto deposit:', error)
-        console.error('Error details:', error.message, error.details, error.hint)
+        console.error('Error details:', {
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          code: error.code
+        })
         
         // Check for common issues
         if (error.message?.includes('relation "auto_deposits" does not exist')) {
           console.error('💡 Auto deposits table not found. Please run the database migration.')
         }
-        if (error.message?.includes('permission denied')) {
-          console.error('💡 Permission denied. Check RLS policies.')
+        if (error.message?.includes('permission denied') || error.message?.includes('RLS')) {
+          console.error('💡 Permission denied. Check RLS policies and user authentication.')
+        }
+        if (error.message?.includes('JWT')) {
+          console.error('💡 JWT token issue. User may not be properly authenticated.')
         }
         
         return null
@@ -683,6 +810,15 @@ export const autoDepositService = {
   // Get auto deposits for a specific bucket
   async getBucketAutoDeposits(bucketId: string): Promise<AutoDeposit[]> {
     try {
+      console.log('🔍 Fetching auto deposits for bucket:', bucketId)
+      
+      // Check authentication first
+      const { data: { user } } = await supabase.auth.getUser()
+      console.log('👤 User authenticated for bucket query:', {
+        isAuthenticated: !!user,
+        userId: user?.id
+      })
+      
       const { data, error } = await supabase
         .from('auto_deposits')
         .select('*')
@@ -691,18 +827,29 @@ export const autoDepositService = {
         .order('created_at', { ascending: false })
       
       if (error) {
+        console.error('❌ Error fetching bucket auto deposits:', error)
+        console.error('Error details:', {
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          code: error.code
+        })
+        
         // Check if table doesn't exist (common during development)
         if (error.message?.includes('relation "auto_deposits" does not exist')) {
-          console.warn('Auto deposits table not found. Please run the Supabase schema to create the auto_deposits table.')
+          console.warn('💡 Auto deposits table not found. Please run the Supabase schema to create the auto_deposits table.')
           return []
         }
-        console.error('Error fetching bucket auto deposits:', error)
+        if (error.message?.includes('permission denied') || error.message?.includes('RLS')) {
+          console.error('💡 Permission denied on bucket query. Check RLS policies.')
+        }
         return []
       }
       
+      console.log('📋 Found auto deposits for bucket:', data ? data.length : 0, data)
       return data || []
     } catch (error) {
-      console.error('Error fetching bucket auto deposits:', error)
+      console.error('❌ Unexpected error fetching bucket auto deposits:', error)
       return []
     }
   },
@@ -768,6 +915,15 @@ export const autoDepositService = {
   // Update auto deposit status
   async updateAutoDepositStatus(id: string, status: AutoDeposit['status']): Promise<AutoDeposit | null> {
     try {
+      console.log('🔄 Updating auto deposit status:', { id, status })
+      
+      // Check authentication first
+      const { data: { user } } = await supabase.auth.getUser()
+      console.log('👤 User authenticated for status update:', {
+        isAuthenticated: !!user,
+        userId: user?.id
+      })
+      
       const { data, error } = await supabase
         .from('auto_deposits')
         .update({ 
@@ -779,13 +935,25 @@ export const autoDepositService = {
         .single()
       
       if (error) {
-        console.error('Error updating auto deposit status:', error)
+        console.error('❌ Error updating auto deposit status:', error)
+        console.error('Error details:', {
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          code: error.code
+        })
+        
+        if (error.message?.includes('permission denied') || error.message?.includes('RLS')) {
+          console.error('💡 Permission denied on status update. Check RLS policies.')
+        }
+        
         return null
       }
       
+      console.log('✅ Auto deposit status updated successfully:', data)
       return data
     } catch (error) {
-      console.error('Error updating auto deposit status:', error)
+      console.error('❌ Unexpected error updating auto deposit status:', error)
       return null
     }
   },
@@ -815,7 +983,280 @@ export const autoDepositService = {
     }
   },
 
-  // TODO: Add daily worker to execute auto deposit rules
-  // This would check for auto deposits where next_execution_date <= today
-  // and execute the transfers, then update next_execution_date
+  // Execute auto deposits that are due
+  async executeAutoDeposits(userId?: string): Promise<{ success: boolean; executed: number; error?: string }> {
+    try {
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+      
+      // Get all active auto deposits that are due
+      const { data: dueDeposits, error } = await supabase
+        .from('auto_deposits')
+        .select('*')
+        .eq('status', 'active')
+        .lte('next_execution_date', today.toISOString().split('T')[0])
+        .order('created_at', { ascending: true })
+      
+      if (error) {
+        console.error('Error fetching due auto deposits:', error)
+        return { success: false, executed: 0, error: error.message }
+      }
+      
+      if (!dueDeposits || dueDeposits.length === 0) {
+        return { success: true, executed: 0 }
+      }
+      
+      let executedCount = 0
+      
+      for (const autoDeposit of dueDeposits) {
+        try {
+          // Check if bucket is completed
+          const bucket = await bucketService.getBucket(autoDeposit.bucket_id)
+          if (!bucket) continue
+          
+          // Skip if bucket is completed and end_type is bucket_completed
+          if (autoDeposit.end_type === 'bucket_completed' && 
+              bucket.current_amount >= bucket.target_amount) {
+            // Mark auto deposit as completed
+            await this.updateAutoDepositStatus(autoDeposit.id, 'completed')
+            continue
+          }
+          
+          // Skip if end date has passed
+          if (autoDeposit.end_type === 'specific_date' && 
+              autoDeposit.end_date && 
+              new Date(autoDeposit.end_date) < today) {
+            await this.updateAutoDepositStatus(autoDeposit.id, 'completed')
+            continue
+          }
+          
+          // Execute the transfer from main bucket to the target bucket
+          const transferResult = await mainBucketService.transferFromMainBucket(
+            autoDeposit.user_id,
+            autoDeposit.bucket_id,
+            autoDeposit.amount
+          )
+          
+          if (transferResult.success) {
+            // Create activity record for the auto deposit
+            await activityService.createActivity({
+              bucket_id: autoDeposit.bucket_id,
+              title: 'Auto deposited',
+              amount: autoDeposit.amount,
+              activity_type: 'auto_deposit',
+              from_source: 'Main Bucket',
+              to_destination: bucket.title,
+              date: today.toISOString().split('T')[0],
+              description: `Auto deposit of $${autoDeposit.amount}`
+            })
+            
+            // Calculate next execution date
+            let nextDate = new Date(autoDeposit.next_execution_date)
+            switch (autoDeposit.repeat_type) {
+              case 'daily':
+                nextDate.setDate(nextDate.getDate() + 1)
+                break
+              case 'weekly':
+                nextDate.setDate(nextDate.getDate() + 7)
+                break
+              case 'biweekly':
+                nextDate.setDate(nextDate.getDate() + 14)
+                break
+              case 'monthly':
+                nextDate.setMonth(nextDate.getMonth() + 1)
+                break
+              case 'custom':
+                if (autoDeposit.repeat_every_days) {
+                  nextDate.setDate(nextDate.getDate() + autoDeposit.repeat_every_days)
+                }
+                break
+            }
+            
+            // Update next execution date
+            await this.updateAutoDeposit(autoDeposit.id, {
+              next_execution_date: nextDate.toISOString().split('T')[0]
+            })
+            
+            executedCount++
+            console.log(`✅ Auto deposit executed for bucket ${bucket.title}: $${autoDeposit.amount}`)
+          }
+        } catch (error) {
+          console.error(`Error executing auto deposit ${autoDeposit.id}:`, error)
+        }
+      }
+      
+      return { success: true, executed: executedCount }
+    } catch (error) {
+      console.error('Error executing auto deposits:', error)
+      return { success: false, executed: 0, error: 'Failed to execute auto deposits' }
+    }
+  }
+}
+
+export const userPreferencesService = {
+  // Get user preferences
+  async getUserPreferences(userId: string): Promise<UserPreferences | null> {
+    try {
+      console.log('🔍 Fetching user preferences for user:', userId)
+      
+      // Check authentication first
+      const { data: { user }, error: authError } = await supabase.auth.getUser()
+      
+      if (authError) {
+        console.error('❌ Authentication error:', authError)
+        return null
+      }
+      
+      console.log('👤 User authenticated for preferences fetch:', {
+        isAuthenticated: !!user,
+        userId: user?.id,
+        matchesTargetUser: user?.id === userId
+      })
+      
+      if (!user || user.id !== userId) {
+        console.error('❌ User not authenticated or ID mismatch')
+        return null
+      }
+      
+      const { data, error } = await supabase
+        .from('user_preferences')
+        .select('*')
+        .eq('user_id', userId)
+        .single()
+      
+      if (error) {
+        console.error('❌ Error fetching user preferences:', error)
+        console.error('❌ Full error object:', JSON.stringify(error, null, 2))
+        console.error('❌ Error details:', {
+          message: error?.message || 'No message',
+          code: error?.code || 'No code',
+          details: error?.details || 'No details',
+          hint: error?.hint || 'No hint'
+        })
+        
+        if (error.code === 'PGRST116') {
+          // No preferences found, create default ones
+          console.log('📝 No preferences found (PGRST116), creating default preferences')
+          return await this.createUserPreferences(userId, { theme: 'light' })
+        }
+        
+        // Check for common issues
+        if (error.message?.includes('relation "user_preferences" does not exist')) {
+          console.error('💡 User preferences table not found. Please run the add-user-preferences.sql script.')
+        }
+        if (error.message?.includes('permission denied') || error.message?.includes('RLS')) {
+          console.error('💡 Permission denied on preferences fetch. Check RLS policies.')
+        }
+        
+        return null
+      }
+      
+      console.log('✅ User preferences loaded:', data)
+      return data
+    } catch (error) {
+      console.error('❌ Unexpected error fetching user preferences:', error)
+      return null
+    }
+  },
+
+  // Create user preferences
+  async createUserPreferences(userId: string, preferences: Partial<Pick<UserPreferences, 'theme'>>): Promise<UserPreferences | null> {
+    try {
+      console.log('🚀 Creating user preferences:', { userId, preferences })
+      
+      // Check authentication first
+      const { data: { user }, error: authError } = await supabase.auth.getUser()
+      
+      if (authError) {
+        console.error('❌ Authentication error during creation:', authError)
+        return null
+      }
+      
+      console.log('👤 User authenticated for preferences creation:', {
+        isAuthenticated: !!user,
+        userId: user?.id,
+        matchesTargetUser: user?.id === userId
+      })
+      
+      if (!user || user.id !== userId) {
+        console.error('❌ User not authenticated or ID mismatch during creation')
+        return null
+      }
+      
+      const insertData = {
+        user_id: userId,
+        theme: preferences.theme || 'light'
+      }
+      
+      console.log('📝 Insert data for user preferences:', insertData)
+      
+      const { data, error } = await supabase
+        .from('user_preferences')
+        .insert([insertData])
+        .select()
+        .single()
+      
+      if (error) {
+        console.error('❌ Error creating user preferences:', error)
+        console.error('❌ Full error object:', JSON.stringify(error, null, 2))
+        console.error('❌ Error details:', {
+          message: error?.message || 'No message',
+          code: error?.code || 'No code',
+          details: error?.details || 'No details',
+          hint: error?.hint || 'No hint'
+        })
+        console.error('❌ Insert data was:', insertData)
+        
+        // Check for common issues
+        if (error.message?.includes('relation "user_preferences" does not exist')) {
+          console.error('💡 User preferences table not found. Please run the add-user-preferences.sql script.')
+        }
+        if (error.message?.includes('permission denied') || error.message?.includes('RLS')) {
+          console.error('💡 Permission denied on preferences creation. Check RLS policies.')
+        }
+        
+        return null
+      }
+      
+      console.log('✅ User preferences created successfully:', data)
+      return data
+    } catch (error) {
+      console.error('❌ Unexpected error creating user preferences:', error)
+      return null
+    }
+  },
+
+  // Update user preferences
+  async updateUserPreferences(userId: string, updates: Partial<Pick<UserPreferences, 'theme'>>): Promise<UserPreferences | null> {
+    try {
+      console.log('🔧 Updating user preferences:', { userId, updates })
+      
+      const { data, error } = await supabase
+        .from('user_preferences')
+        .update({
+          ...updates,
+          updated_at: new Date().toISOString()
+        })
+        .eq('user_id', userId)
+        .select()
+        .single()
+      
+      if (error) {
+        console.error('❌ Error updating user preferences:', error)
+        return null
+      }
+      
+      console.log('✅ User preferences updated successfully:', data)
+      return data
+    } catch (error) {
+      console.error('❌ Unexpected error updating user preferences:', error)
+      return null
+    }
+  },
+
+  // Update user theme specifically
+  async updateUserTheme(userId: string, theme: 'light' | 'dark' | 'system'): Promise<UserPreferences | null> {
+    console.log('🎨 Updating user theme:', { userId, theme })
+    return await this.updateUserPreferences(userId, { theme })
+  }
 }

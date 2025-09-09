@@ -254,6 +254,26 @@ function EditAutoDepositContent() {
     setShowCancelModal(false)
     
     try {
+      // First, try to cancel auto deposits in the database
+      const { autoDepositService } = await import('@/lib/supabase')
+      
+      console.log('🗑️ Canceling auto deposits in database for bucket:', bucketId)
+      
+      // Get all active auto deposits for this bucket
+      const activeAutoDeposits = await autoDepositService.getBucketAutoDeposits(bucketId)
+      console.log('📋 Found active auto deposits:', activeAutoDeposits.length)
+      
+      // Cancel each active auto deposit in the database
+      for (const autoDeposit of activeAutoDeposits) {
+        console.log('🔄 Canceling auto deposit:', autoDeposit.id)
+        const result = await autoDepositService.updateAutoDepositStatus(autoDeposit.id, 'cancelled')
+        if (result) {
+          console.log('✅ Successfully cancelled auto deposit in database:', autoDeposit.id)
+        } else {
+          console.warn('⚠️ Failed to cancel auto deposit in database:', autoDeposit.id)
+        }
+      }
+      
       // Remove auto deposit from localStorage
       const autoDepositsKey = `auto_deposits_${bucketId}`
       console.log('🗑️ Removing auto deposit from localStorage with key:', autoDepositsKey)
@@ -261,10 +281,7 @@ function EditAutoDepositContent() {
       
       // Verify it was removed
       const checkRemoved = localStorage.getItem(autoDepositsKey)
-      console.log('✅ Verification - auto deposit removed?', checkRemoved === null ? 'YES' : 'NO, still exists')
-      
-      // TODO: Cancel auto deposit in database
-      // await autoDepositService.cancelAutoDeposit(...)
+      console.log('✅ Verification - auto deposit removed from localStorage?', checkRemoved === null ? 'YES' : 'NO, still exists')
       
       console.log('✅ Canceled auto deposit for bucket:', bucketId)
       

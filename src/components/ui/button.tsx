@@ -7,11 +7,13 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        primary: "bg-primary text-primary-foreground hover:bg-primary/90",
-        secondary: "bg-secondary text-secondary-foreground hover:bg-secondary/80",
-        "secondary-icon": "bg-secondary text-secondary-foreground hover:bg-secondary/80",
+        primary: "bg-primary text-primary-foreground hover:bg-primary/90 button-border-theme button-shadow-theme",
+        "primary-black": "bg-primary text-primary-foreground hover:bg-primary/90 border border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]",
+        secondary: "bg-secondary text-secondary-foreground hover:bg-secondary/80 button-border-theme button-shadow-theme",
+        "secondary-icon": "bg-secondary text-secondary-foreground hover:bg-secondary/80 button-border-theme button-shadow-theme",
+        "secondary-icon-black": "bg-secondary text-secondary-foreground hover:bg-secondary/80 border border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]",
         outline: "border-2 border-foreground/40 bg-transparent text-foreground hover:bg-foreground/10 hover:border-foreground/60",
-        avatar: "bg-secondary text-secondary-foreground hover:bg-secondary/80 rounded-full",
+        avatar: "bg-secondary text-secondary-foreground hover:bg-secondary/80 rounded-full button-border-theme button-shadow-theme",
       },
       size: {
         default: "h-[45px] px-6 py-4 text-[15px] rounded-xl",
@@ -38,7 +40,7 @@ export interface ButtonProps
 
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   ({ className, variant, size, /* asChild = false, */ icon, iconPosition = "left", initial, children, ...props }, ref) => {
-    const isIconOnly = variant === "secondary-icon"
+    const isIconOnly = variant === "secondary-icon" || variant === "secondary-icon-black"
     const isAvatar = variant === "avatar"
     
     // Determine the size to use

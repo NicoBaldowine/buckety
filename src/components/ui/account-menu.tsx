@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Sun, Moon, Monitor, Settings, DollarSign, MessageSquare, LogOut } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/contexts/auth-context"
+import { useRouter } from "next/navigation"
 
 export interface AccountMenuProps {
   className?: string
@@ -12,26 +13,28 @@ export interface AccountMenuProps {
 
 export function AccountMenu({ className }: AccountMenuProps) {
   const { user, signOut } = useAuth()
+  const router = useRouter()
   const [selectedTheme, setSelectedTheme] = React.useState<'light' | 'dark' | 'system'>('system')
 
   React.useEffect(() => {
-    const savedTheme = localStorage.getItem("theme") as "light" | "dark" | null
-    const systemTheme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"
-    
-    if (savedTheme) {
-      setSelectedTheme(savedTheme)
-    } else {
-      setSelectedTheme('system')
+    // Just read the current theme state, don't set it (ThemeInitializer handles that)
+    const getCurrentTheme = () => {
+      const savedTheme = localStorage.getItem("theme") as "light" | "dark" | null
+      if (savedTheme) {
+        setSelectedTheme(savedTheme)
+      } else {
+        setSelectedTheme('system')
+      }
     }
-    
-    // Apply theme without causing re-render
-    const themeToApply = savedTheme || systemTheme
-    document.documentElement.setAttribute("data-theme", themeToApply)
-  }, [])
 
-  const handleThemeChange = (theme: 'light' | 'dark' | 'system') => {
+    getCurrentTheme()
+  }, [user?.id])
+
+  const handleThemeChange = async (theme: 'light' | 'dark' | 'system') => {
+    console.log('🎨 Changing theme to:', theme)
     setSelectedTheme(theme)
     
+    // Apply theme immediately
     if (theme === 'system') {
       localStorage.removeItem("theme")
       const systemTheme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"
@@ -39,6 +42,24 @@ export function AccountMenu({ className }: AccountMenuProps) {
     } else {
       localStorage.setItem("theme", theme)
       document.documentElement.setAttribute("data-theme", theme)
+    }
+
+    // Save to database if user is logged in
+    if (user?.id) {
+      try {
+        console.log('💾 Saving theme to database for user:', user.id)
+        const { userPreferencesService } = await import('@/lib/supabase')
+        const result = await userPreferencesService.updateUserTheme(user.id, theme)
+        
+        if (result) {
+          console.log('✅ Theme saved successfully in database')
+        } else {
+          console.warn('⚠️ Failed to save theme to database, but localStorage updated')
+        }
+      } catch (error) {
+        console.error('❌ Error saving theme to database:', error)
+        // Theme is still applied locally via localStorage
+      }
     }
   }
 
@@ -92,6 +113,7 @@ export function AccountMenu({ className }: AccountMenuProps) {
         <Button 
           variant="primary" 
           className="w-full !bg-white !text-black hover:!bg-white/90"
+          onClick={() => router.push('/profile')}
         >
           View profile
         </Button>
@@ -141,15 +163,27 @@ export function AccountMenu({ className }: AccountMenuProps) {
 
       {/* Menu Items */}
       <div className="space-y-1 mb-4">
-        <button className="w-full flex items-center gap-3 px-3 py-3 text-left text-white text-[15px] font-semibold hover:bg-white/10 rounded-lg transition-colors" style={{ letterSpacing: '-0.03em' }}>
+        <button 
+          onClick={() => router.push('/settings')}
+          className="w-full flex items-center gap-3 px-3 py-3 text-left text-white text-[15px] font-semibold hover:bg-white/10 rounded-lg transition-colors" 
+          style={{ letterSpacing: '-0.03em' }}
+        >
           <Settings className="w-4 h-4" />
           Settings
         </button>
-        <button className="w-full flex items-center gap-3 px-3 py-3 text-left text-white text-[15px] font-semibold hover:bg-white/10 rounded-lg transition-colors" style={{ letterSpacing: '-0.03em' }}>
+        <button 
+          onClick={() => router.push('/pricing')}
+          className="w-full flex items-center gap-3 px-3 py-3 text-left text-white text-[15px] font-semibold hover:bg-white/10 rounded-lg transition-colors" 
+          style={{ letterSpacing: '-0.03em' }}
+        >
           <DollarSign className="w-4 h-4" />
           Pricing
         </button>
-        <button className="w-full flex items-center gap-3 px-3 py-3 text-left text-white text-[15px] font-semibold hover:bg-white/10 rounded-lg transition-colors" style={{ letterSpacing: '-0.03em' }}>
+        <button 
+          onClick={() => window.open('https://github.com/anthropics/claude-code/issues', '_blank')}
+          className="w-full flex items-center gap-3 px-3 py-3 text-left text-white text-[15px] font-semibold hover:bg-white/10 rounded-lg transition-colors" 
+          style={{ letterSpacing: '-0.03em' }}
+        >
           <MessageSquare className="w-4 h-4" />
           Give feedback
         </button>

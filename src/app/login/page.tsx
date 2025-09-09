@@ -3,6 +3,7 @@
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { AppLoadingScreen } from "@/components/ui/loading-spinner"
 import { useRouter } from "next/navigation"
 import { useState, useEffect } from "react"
 import { authService } from "@/lib/auth"
@@ -22,11 +23,20 @@ export default function LoginPage() {
   useEffect(() => {
     let mounted = true
     
+    // Set timeout to prevent infinite loading
+    const timeout = setTimeout(() => {
+      if (mounted) {
+        console.log('🚨 Auth check timeout - proceeding to login form')
+        setCheckingAuth(false)
+      }
+    }, 1500)
+    
     const checkSession = async () => {
       try {
         const session = await authService.getSession()
         if (session && mounted) {
           console.log('User already logged in, redirecting to home...')
+          clearTimeout(timeout)
           router.push('/home')
           return
         }
@@ -34,6 +44,7 @@ export default function LoginPage() {
         console.error('Error checking session:', error)
       } finally {
         if (mounted) {
+          clearTimeout(timeout)
           setCheckingAuth(false)
         }
       }
@@ -44,6 +55,7 @@ export default function LoginPage() {
     // Cleanup
     return () => {
       mounted = false
+      clearTimeout(timeout)
     }
   }, [router])
 
@@ -101,11 +113,7 @@ export default function LoginPage() {
   
   // Show loading while checking if user is already authenticated
   if (checkingAuth) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-foreground/50">Checking authentication...</div>
-      </div>
-    )
+    return <AppLoadingScreen />
   }
 
   return (

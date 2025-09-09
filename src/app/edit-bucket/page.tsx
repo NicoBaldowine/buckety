@@ -145,21 +145,46 @@ function EditBucketContent() {
           alert('Bucket not found.')
         }
       } else {
-        // Use hybrid storage to update both localStorage and database
-        const success = HybridStorage.updateLocalBucket(bucketId, {
+        // Database first approach - update in Supabase first, then localStorage
+        console.log('🚀 Updating bucket in database first:', {
+          bucketId,
           title: bucketName,
           targetAmount: parsedAmount,
           backgroundColor: selectedColor
-        }, effectiveUser.id)
+        })
         
-        if (success) {
-          console.log('✅ Bucket updated successfully:', bucketName)
+        const { bucketService } = await import('@/lib/supabase')
+        
+        // Update bucket in database
+        const updatedBucket = await bucketService.updateBucket(bucketId, {
+          title: bucketName,
+          target_amount: parsedAmount,
+          background_color: selectedColor
+        })
+        
+        if (updatedBucket) {
+          console.log('✅ Bucket updated successfully in database:', updatedBucket)
+          
+          // Update localStorage to match database
+          const buckets = HybridStorage.getLocalBuckets(effectiveUser.id)
+          const bucketIndex = buckets.findIndex(b => b.id === bucketId)
+          
+          if (bucketIndex !== -1) {
+            buckets[bucketIndex] = {
+              ...buckets[bucketIndex],
+              title: bucketName,
+              targetAmount: parsedAmount,
+              backgroundColor: selectedColor
+            }
+            localStorage.setItem(`buckets_${effectiveUser.id}`, JSON.stringify(buckets))
+            console.log('✅ localStorage updated to match database')
+          }
           
           // Navigate to home page
           router.push('/home')
         } else {
-          console.error('❌ Failed to update bucket')
-          alert('Failed to update bucket. Please try again.')
+          console.error('❌ Failed to update bucket in database')
+          alert('Failed to update bucket in database. Please check your connection.')
         }
       }
     } catch (error) {

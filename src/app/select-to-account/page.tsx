@@ -80,7 +80,7 @@ function SelectToAccountContent() {
           <Button 
             variant="secondary-icon" 
             icon={<X />} 
-            onClick={() => router.back()}
+            onClick={() => router.push(`/add-money?${searchParams?.toString() || ''}`)}
           />
         </div>
 

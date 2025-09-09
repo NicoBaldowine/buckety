@@ -18,8 +18,8 @@ import { useAuth } from "@/contexts/auth-context"
 // Determine if activity should show an amount
 function shouldShowAmount(activity: Activity): boolean {
   // Non-monetary activities that shouldn't show amounts
-  const nonMonetaryActivityTypes = ['bucket_created', 'auto_deposit_started']
-  const nonMonetaryTitles = ['Bucket created', 'Account opened', 'Settings updated', 'Auto deposit setup']
+  const nonMonetaryActivityTypes = ['bucket_created', 'bucket_completed', 'auto_deposit_started']
+  const nonMonetaryTitles = ['Bucket created', 'Bucket completed', 'Account opened', 'Settings updated', 'Auto deposit setup']
   
   return !nonMonetaryActivityTypes.includes(activity.activity_type) && 
          !nonMonetaryTitles.includes(activity.title) &&
@@ -253,6 +253,18 @@ function BucketDetailsContent() {
           if (cachedActivities) {
             try {
               const cached = JSON.parse(cachedActivities)
+              
+              // Check if cached activities have today's date - if not, they might be stale
+              const today = new Date().toISOString().split('T')[0]
+              const hasRecentActivity = cached.some((activity: any) => activity.date === today)
+              
+              console.log('📅 Cached activities check:', {
+                today,
+                cachedCount: cached.length,
+                hasRecentActivity,
+                activityDates: cached.map((a: any) => ({ date: a.date, title: a.title })).slice(0, 5)
+              })
+              
               setActivities(cached)
               setLoadingActivities(false) // Show cached data immediately
             } catch {
@@ -262,7 +274,73 @@ function BucketDetailsContent() {
           
           // Load fresh data with user context
           const bucketActivities = await HybridStorage.getBucketActivities(bucketData.id)
-          setActivities(bucketActivities)
+          
+          // If bucket is completed, add a "Bucket completed" activity if not already present
+          if (bucketData.id !== 'main-bucket' && bucketData.currentAmount >= bucketData.targetAmount) {
+            const hasCompletionActivity = bucketActivities.some(
+              activity => activity.activity_type === 'bucket_completed'
+            )
+            
+            if (!hasCompletionActivity) {
+              // Find the date when bucket was completed (last activity that reached/exceeded target)
+              let completionDate = new Date().toISOString()
+              let completionDateString = new Date().toISOString().split('T')[0]
+              
+              // Find the last activity that brought the total to or above target
+              let runningTotal = 0
+              for (const activity of [...bucketActivities].reverse()) {
+                if (activity.activity_type === 'money_added' || activity.activity_type === 'money_removed') {
+                  runningTotal += activity.amount
+                  if (runningTotal >= bucketData.targetAmount) {
+                    // Use the activity's date field if available, otherwise use current date
+                    if (activity.date) {
+                      completionDateString = activity.date
+                      completionDate = new Date(activity.date).toISOString()
+                    } else if (activity.created_at) {
+                      completionDate = activity.created_at
+                      completionDateString = new Date(activity.created_at).toISOString().split('T')[0]
+                    }
+                    break
+                  }
+                }
+              }
+              
+              const completionActivity: Activity = {
+                id: `completion-${bucketData.id}`,
+                bucket_id: bucketData.id,
+                title: 'Bucket completed',
+                amount: 0,
+                activity_type: 'bucket_completed',
+                from_source: '',
+                to_destination: '',
+                date: completionDateString,
+                created_at: completionDate
+              }
+              
+              // Insert completion activity at the beginning (most recent)
+              // since it happens after the last money transfer that completed the bucket
+              bucketActivities.unshift(completionActivity)
+            }
+          }
+          
+          // Sort activities by date (newest first), then by created_at timestamp
+          const sortedActivities = bucketActivities.sort((a, b) => {
+            // First sort by date (newest first)
+            const dateA = new Date(a.date || a.created_at || '1970-01-01')
+            const dateB = new Date(b.date || b.created_at || '1970-01-01')
+            const dateComparison = dateB.getTime() - dateA.getTime()
+            
+            if (dateComparison !== 0) {
+              return dateComparison
+            }
+            
+            // If dates are the same, sort by created_at timestamp (newest first)
+            const createdA = new Date(a.created_at || a.date || '1970-01-01')
+            const createdB = new Date(b.created_at || b.date || '1970-01-01')
+            return createdB.getTime() - createdA.getTime()
+          })
+          
+          setActivities(sortedActivities)
         } catch (error) {
           console.error('Error loading activities:', error)
           setActivities([])
@@ -514,7 +592,7 @@ function BucketDetailsContent() {
         <div className="max-w-[660px] mx-auto px-12 py-4 max-sm:px-4">
           <div className="flex items-center justify-between">
             <Button 
-              variant="secondary-icon" 
+              variant="secondary-icon-black" 
               icon={<ArrowLeft />} 
               onClick={() => {
                 const fromTransfer = searchParams.get('fromTransfer')
@@ -548,7 +626,7 @@ function BucketDetailsContent() {
               <DropdownMenu
                 trigger={
                   <Button 
-                    variant="secondary-icon" 
+                    variant="secondary-icon-black" 
                     icon={<MoreVertical />}
                     className="!bg-black/5 !text-black"
                   />
@@ -579,7 +657,7 @@ function BucketDetailsContent() {
                       </DropdownMenuItem>
                     ) : (
                       <DropdownMenuItem onClick={() => {
-                        router.push(`/add-money?to=${bucketData.id}&showAutoDeposit=true`)
+                        router.push(`/add-money?to=${bucketData.id}&showAutoDeposit=true&source=/bucket-details?id=${bucketData.id}`)
                       }}>
                         <Repeat className="h-4 w-4" />
                         Auto deposit
@@ -595,7 +673,7 @@ function BucketDetailsContent() {
                 )}
               </DropdownMenu>
               <Button 
-                variant="primary" 
+                variant="primary-black" 
                 icon={bucketData.id !== 'main-bucket' && displayCurrentAmount >= bucketData.targetAmount ? <Download /> : <Plus />} 
                 iconPosition="left"
                 className="!bg-black !text-white"
@@ -603,7 +681,7 @@ function BucketDetailsContent() {
                   if (bucketData.id !== 'main-bucket' && displayCurrentAmount >= bucketData.targetAmount) {
                     alert('Withdraw functionality coming soon!')
                   } else {
-                    router.push(`/add-money?to=${bucketData.id}`)
+                    router.push(`/add-money?to=${bucketData.id}&source=/bucket-details?id=${bucketData.id}`)
                   }
                 }}
               >
@@ -620,11 +698,11 @@ function BucketDetailsContent() {
         {/* Header with navigation and actions */}
         <div 
           ref={headerRef}
-          className="flex items-center justify-between mb-8"
+          className="flex items-center justify-between mb-12"
           style={{ animation: 'slideInFromTop 0.4s ease-out 0.1s both' }}
         >
           <Button 
-            variant="secondary-icon" 
+            variant="secondary-icon-black" 
             icon={<ArrowLeft />} 
             onClick={() => {
               // Always go to home when coming from create, transfer, or auto deposit
@@ -672,7 +750,7 @@ function BucketDetailsContent() {
             <DropdownMenu
               trigger={
                 <Button 
-                  variant="secondary-icon" 
+                  variant="secondary-icon-black" 
                   icon={<MoreVertical />}
                   className="!bg-black/5 !text-black"
                 />
@@ -703,7 +781,7 @@ function BucketDetailsContent() {
                     </DropdownMenuItem>
                   ) : (
                     <DropdownMenuItem onClick={() => {
-                      router.push(`/add-money?to=${bucketData.id}&showAutoDeposit=true`)
+                      router.push(`/add-money?to=${bucketData.id}&showAutoDeposit=true&source=/bucket-details?id=${bucketData.id}`)
                     }}>
                       <Repeat className="h-4 w-4" />
                       Auto deposit
@@ -719,7 +797,7 @@ function BucketDetailsContent() {
               )}
             </DropdownMenu>
             <Button 
-              variant="primary" 
+              variant="primary-black" 
               icon={bucketData.id !== 'main-bucket' && displayCurrentAmount >= bucketData.targetAmount ? <Download /> : <Plus />} 
               iconPosition="left"
               className="!bg-black !text-white"
@@ -729,7 +807,7 @@ function BucketDetailsContent() {
                   // TODO: Navigate to withdraw page when implemented
                   alert('Withdraw functionality coming soon!')
                 } else {
-                  router.push(`/add-money?to=${bucketData.id}`)
+                  router.push(`/add-money?to=${bucketData.id}&source=/bucket-details?id=${bucketData.id}`)
                 }
               }}
             >
@@ -773,7 +851,7 @@ function BucketDetailsContent() {
               >
                 ${animatedCurrentAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </span>
-              {bucketData.id !== 'main-bucket' && displayCurrentAmount < bucketData.targetAmount && (
+              {bucketData.id !== 'main-bucket' && (
                 <span 
                   className="text-[24px] font-semibold tracking-tight text-black/40"
                 >
@@ -795,7 +873,7 @@ function BucketDetailsContent() {
               max={100} 
               backgroundColor={bucketData.backgroundColor}
               isCompleted={displayCurrentAmount >= bucketData.targetAmount}
-              showCompletionBadge={displayCurrentAmount >= bucketData.targetAmount}
+              showCompletionBadge={false}
               className="w-full" 
             />
             {animatedProgress < 100 && (
@@ -860,11 +938,16 @@ function BucketDetailsContent() {
             >
               <ActivityListItem
                 title={transformActivityTitle(activity)}
-                date={new Date(activity.date).toLocaleDateString('en-US', { 
-                  month: 'short', 
-                  day: 'numeric', 
-                  year: 'numeric' 
-                })}
+                date={(() => {
+                  // Parse date without timezone conversion
+                  const [year, month, day] = activity.date.split('-');
+                  const dateObj = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+                  return dateObj.toLocaleDateString('en-US', { 
+                    month: 'short', 
+                    day: 'numeric', 
+                    year: 'numeric' 
+                  });
+                })()}
                 amount={shouldShowAmount(activity) ? 
                   (activity.amount >= 0 ? `+$${Math.abs(activity.amount)}` : `-$${Math.abs(activity.amount)}`) 
                   : undefined

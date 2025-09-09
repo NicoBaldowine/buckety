@@ -114,9 +114,9 @@ export default function LandingPage() {
         <div className="max-w-[1200px] mx-auto px-10 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center">
-              <div className="relative w-32 h-10">
+              <div className="relative w-44 h-14">
                 <Image 
-                  src="/zuma-light.svg" 
+                  src="/zuma-dark.svg" 
                   alt="Zuma Logo" 
                   fill
                   className="object-contain object-left"
@@ -127,17 +127,17 @@ export default function LandingPage() {
             <div className="flex items-center gap-3">
               <Button 
                 variant="secondary"
-                onClick={() => router.push('/login')}
+                onClick={() => router.push('/sign-up')}
                 className="text-white bg-transparent border-white/20 hover:bg-white/10"
               >
-                Sign in
+                Sign up
               </Button>
               <Button 
                 variant="primary"
-                onClick={() => router.push('/sign-up')}
-                className="bg-white text-black hover:bg-white/90"
+                onClick={() => router.push('/login')}
+                className="bg-white text-black hover:bg-white/90 px-8 py-3 text-[16px] font-medium"
               >
-                Get Started
+                Login
               </Button>
             </div>
           </div>
@@ -158,7 +158,7 @@ export default function LandingPage() {
             {/* Zuma logo - 10% smaller */}
             <div className="relative w-44 h-14">
               <Image 
-                src="/zuma-light.svg" 
+                src="/zuma-dark.svg" 
                 alt="Zuma Logo" 
                 fill
                 className="object-contain object-left"
@@ -169,17 +169,17 @@ export default function LandingPage() {
           <div className="flex items-center gap-3">
             <Button 
               variant="secondary"
-              onClick={() => router.push('/login')}
+              onClick={() => router.push('/sign-up')}
               className="text-white bg-transparent border-white/20 hover:bg-white/10"
             >
-              Sign in
+              Sign up
             </Button>
             <Button 
               variant="primary"
-              onClick={() => router.push('/sign-up')}
+              onClick={() => router.push('/login')}
               className="bg-white text-black hover:bg-white/90"
             >
-              Log in
+              Login
             </Button>
           </div>
         </header>

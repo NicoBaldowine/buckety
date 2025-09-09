@@ -30,8 +30,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Emergency timeout to prevent infinite loading
     const emergencyTimeout = setTimeout(() => {
       // Silently force loading to false if initialization takes too long
+      console.warn('🚨 Auth initialization timeout - forcing completion')
       setLoading(false)
-    }, 3000) // Increased to 3 seconds to allow proper auth initialization
+    }, 2000) // 2 seconds should be enough
 
     // Get initial session
     const initializeAuth = async () => {
