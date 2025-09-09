@@ -1,12 +1,12 @@
 import * as React from "react"
 import { cn } from "@/lib/utils"
-import { Plus, Minus, Car, Sparkles, Repeat, Download } from "lucide-react"
+import { Plus, Minus, Car, Sparkles, Repeat, Download, PartyPopper } from "lucide-react"
 
 export interface ActivityListItemProps extends React.HTMLAttributes<HTMLDivElement> {
   title: string
   date: string
   amount?: string
-  activityType?: 'money_added' | 'money_removed' | 'withdrawal' | 'bucket_created' | 'auto_deposit' | 'auto_deposit_started' | 'apy_earnings'
+  activityType?: 'money_added' | 'money_removed' | 'withdrawal' | 'bucket_created' | 'bucket_completed' | 'auto_deposit' | 'auto_deposit_started' | 'apy_earnings'
   backgroundColor?: string
 }
 
@@ -28,6 +28,8 @@ const ActivityListItem = React.forwardRef<HTMLDivElement, ActivityListItemProps>
             return <Download className="h-4 w-4 text-black" />
           case 'bucket_created':
             return <Sparkles className="h-4 w-4 text-black" />
+          case 'bucket_completed':
+            return <PartyPopper className="h-4 w-4 text-black" />
           case 'auto_deposit_started':
             return <Repeat className="h-4 w-4 text-black" />
           default:
@@ -49,6 +51,8 @@ const ActivityListItem = React.forwardRef<HTMLDivElement, ActivityListItemProps>
         return <Repeat className="h-4 w-4 text-black" />
       } else if (lowerTitle.includes('created')) {
         return <Sparkles className="h-4 w-4 text-black" />
+      } else if (lowerTitle.includes('completed')) {
+        return <PartyPopper className="h-4 w-4 text-black" />
       }
       
       // Default icon based on amount

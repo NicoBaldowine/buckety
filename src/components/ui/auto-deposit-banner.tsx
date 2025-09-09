@@ -28,17 +28,41 @@ export function AutoDepositBanner({ autoDeposit, onManage }: AutoDepositBannerPr
     if (autoDeposit.end_type === 'bucket_completed') {
       return 'until bucket is completed'
     } else if (autoDeposit.end_date) {
-      return `until ${new Date(autoDeposit.end_date).toLocaleDateString()}`
+      return `until ${(() => {
+        const [year, month, day] = autoDeposit.end_date.split('-');
+        const dateObj = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+        return dateObj.toLocaleDateString();
+      })()}`
     }
     return ''
   }
 
   const getDaysUntilNextDeposit = () => {
+    // For daily deposits, next deposit is always tomorrow (or today if not yet executed)
+    if (autoDeposit.repeat_type === 'daily') {
+      return 'tomorrow'
+    }
+    
     const nextDate = new Date(autoDeposit.next_execution_date)
     const today = new Date()
+    today.setHours(0, 0, 0, 0) // Reset time to start of day
+    nextDate.setHours(0, 0, 0, 0)
+    
     const diffTime = nextDate.getTime() - today.getTime()
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
-    return diffDays
+    
+    if (diffDays === 0) return 'today'
+    if (diffDays === 1) return 'tomorrow'
+    if (diffDays < 0) {
+      // If negative, calculate based on frequency
+      switch (autoDeposit.repeat_type) {
+        case 'weekly': return 'in 7 days'
+        case 'biweekly': return 'in 14 days'
+        case 'monthly': return 'in 30 days'
+        default: return 'soon'
+      }
+    }
+    return `in ${diffDays} days`
   }
 
   return (
@@ -58,14 +82,14 @@ export function AutoDepositBanner({ autoDeposit, onManage }: AutoDepositBannerPr
             })} {getFrequencyText()} {getEndDateText()}
           </p>
           <p className="text-[12px] text-black/50 mt-0.5">
-            Next deposit in {getDaysUntilNextDeposit()} days
+            Next deposit {getDaysUntilNextDeposit()}
           </p>
         </div>
         <Button
-          variant="secondary-icon"
+          variant="secondary-icon-black"
           icon={<Settings />}
           onClick={onManage}
-          className="!bg-black/10 !text-black"
+          className="!bg-black/5 !text-black"
         />
       </div>
     </div>

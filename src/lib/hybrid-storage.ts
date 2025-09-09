@@ -9,7 +9,7 @@ export class HybridStorage {
   }
 
   private static getMainBucketKey(userId?: string): string {
-    return `main_bucket_${userId || this.USER_ID}`
+    return `mainBucket_${userId || this.USER_ID}`
   }
 
   // Get buckets from localStorage
@@ -90,6 +90,32 @@ export class HybridStorage {
       buckets.push(newLocalBucket)
       localStorage.setItem(this.getBucketsKey(userId), JSON.stringify(buckets))
 
+      // Add "Bucket created" activity to localStorage
+      const now = new Date()
+      console.log('📅 Creating bucket activity with date:', {
+        date: now.toISOString().split('T')[0],
+        fullTimestamp: now.toISOString(),
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+      })
+      const creationActivity = {
+        id: `creation-${dbBucket.id}-${Date.now()}`,
+        bucket_id: dbBucket.id,
+        user_id: userId || this.USER_ID,
+        title: 'Bucket created',
+        amount: 0,
+        activity_type: 'bucket_created',
+        from_source: '',
+        to_destination: '',
+        date: now.toISOString().split('T')[0], // YYYY-MM-DD format for the date field
+        created_at: now.toISOString(),
+        updated_at: now.toISOString()
+      }
+      
+      // Store the creation activity in localStorage for this bucket
+      // (The database activity is already created by bucketService.createBucket)
+      const activitiesKey = `activities_${dbBucket.id}`
+      localStorage.setItem(activitiesKey, JSON.stringify([creationActivity]))
+
       console.log('✅ Created bucket:', dbBucket.title)
       return dbBucket.id
     } catch (error) {
@@ -124,7 +150,92 @@ export class HybridStorage {
       toBucket.currentAmount += amount
       localStorage.setItem(this.getMainBucketKey(userId), JSON.stringify(mainBucket))
       localStorage.setItem(this.getBucketsKey(userId), JSON.stringify(buckets))
+      
+      // Update database (fire and forget - don't block UI)
+      import('./supabase').then(async ({ bucketService, mainBucketService, activityService }) => {
+        try {
+          // Update main bucket balance in database
+          await mainBucketService.updateMainBucket(userId || this.USER_ID, mainBucket.currentAmount)
+          
+          // Update destination bucket balance in database
+          await bucketService.updateBucket(toBucketId, {
+            current_amount: toBucket.currentAmount
+          })
+          
+          // Log transfer activity to database
+          const dbActivity = await activityService.createActivity({
+            bucket_id: toBucketId,
+            title: `From Main Bucket`,
+            amount: amount,
+            activity_type: 'money_added',
+            from_source: 'Main Bucket',
+            to_destination: toBucket.title,
+            date: new Date().toISOString().split('T')[0],
+            description: `Transferred $${amount} from Main Bucket`
+          })
+          
+          // If database activity was created successfully, replace the temporary localStorage activity
+          if (dbActivity) {
+            const toBucketActivities = JSON.parse(localStorage.getItem(`activities_${toBucketId}`) || '[]')
+            
+            // Remove any temporary activities for this transfer
+            const transferDate = new Date().toISOString().split('T')[0]
+            const filteredActivities = toBucketActivities.filter((activity: any) => 
+              !(activity.title === 'From Main Bucket' && 
+                Math.abs(activity.amount - amount) < 0.01 &&
+                activity.date === transferDate &&
+                (activity.temporary === true || (activity.id && activity.id.startsWith('activity-'))))
+            )
+            
+            // Add the database activity to the top
+            filteredActivities.unshift(dbActivity)
+            if (filteredActivities.length > 50) filteredActivities.pop()
+            localStorage.setItem(`activities_${toBucketId}`, JSON.stringify(filteredActivities))
+          }
+          
+          console.log('✅ Transfer saved to database')
+        } catch (err) {
+          console.error('Failed to save transfer to database:', err)
+        }
+      })
 
+      // Log transfer activity for destination bucket (for instant display)
+      const toBucketActivities = JSON.parse(localStorage.getItem(`activities_${toBucketId}`) || '[]')
+      const currentDate = new Date().toISOString().split('T')[0]
+      
+      // Check if we already have this exact transfer to avoid duplicates
+      const existingTransfer = toBucketActivities.find((activity: any) => 
+        activity.title === 'From Main Bucket' && 
+        Math.abs(activity.amount - amount) < 0.01 && // Use small delta for float comparison
+        activity.date === currentDate
+      )
+      
+      if (!existingTransfer) {
+        const tempActivity = {
+          id: `activity-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`,
+          title: `From Main Bucket`,
+          amount: amount,
+          date: currentDate,
+          created_at: new Date().toISOString(),
+          activity_type: 'money_added',
+          from_source: 'Main Bucket',
+          to_destination: toBucket.title,
+          bucket_id: toBucketId,
+          temporary: true // Flag to identify temporary activities
+        }
+        
+        toBucketActivities.unshift(tempActivity)
+        if (toBucketActivities.length > 50) toBucketActivities.pop()
+        localStorage.setItem(`activities_${toBucketId}`, JSON.stringify(toBucketActivities))
+        console.log('✅ Temporary activity created for instant display:', tempActivity)
+        console.log('📅 Activity date details:', {
+          currentDate,
+          isoString: new Date().toISOString(),
+          timestamp: Date.now(),
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+        })
+      }
+      
       // Log transfer activity for main bucket
       const transferHistory = JSON.parse(localStorage.getItem('main_bucket_transfers') || '[]')
       transferHistory.unshift({
@@ -132,6 +243,7 @@ export class HybridStorage {
         title: `To ${toBucket.title}`,
         amount: -amount,
         date: new Date().toISOString().split('T')[0],
+        created_at: new Date().toISOString(),
         activity_type: 'money_removed',
         from_source: 'Main Bucket',
         to_destination: toBucket.title,
@@ -158,6 +270,36 @@ export class HybridStorage {
       fromBucket.currentAmount -= amount
       localStorage.setItem(this.getBucketsKey(userId), JSON.stringify(buckets))
       
+      // Update database (fire and forget - don't block UI)
+      import('./supabase').then(async ({ bucketService, mainBucketService, activityService }) => {
+        try {
+          // Update source bucket balance in database
+          await bucketService.updateBucket(fromBucketId, {
+            current_amount: fromBucket.currentAmount
+          })
+          
+          // Update main bucket balance in database (mainBucket already has the new value)
+          const updatedMainBucket = this.getLocalMainBucket(userId)
+          await mainBucketService.updateMainBucket(userId || this.USER_ID, updatedMainBucket.currentAmount)
+          
+          // Log transfer activity to database
+          await activityService.createActivity({
+            bucket_id: fromBucketId,
+            title: `To Main Bucket`,
+            amount: -amount,
+            activity_type: 'money_removed',
+            from_source: fromBucket.title,
+            to_destination: 'Main Bucket',
+            date: new Date().toISOString().split('T')[0],
+            description: `Withdrew $${amount} to Main Bucket`
+          })
+          
+          console.log('✅ Withdrawal saved to database')
+        } catch (err) {
+          console.error('Failed to save withdrawal to database:', err)
+        }
+      })
+      
       // Log activity for the source bucket
       const fromBucketActivities = JSON.parse(localStorage.getItem(`activities_${fromBucketId}`) || '[]')
       const fromActivity = {
@@ -165,6 +307,7 @@ export class HybridStorage {
         title: `To Main Bucket`,
         amount: -amount,
         date: new Date().toISOString().split('T')[0],
+        created_at: new Date().toISOString(),
         activity_type: 'money_removed',
         from_source: fromBucket.title,
         to_destination: 'Main Bucket',
@@ -186,6 +329,7 @@ export class HybridStorage {
         title: `From ${fromBucket.title}`,
         amount: amount,
         date: new Date().toISOString().split('T')[0],
+        created_at: new Date().toISOString(),
         activity_type: 'money_added',
         from_source: fromBucket.title,
         to_destination: 'Main Bucket',
@@ -214,6 +358,48 @@ export class HybridStorage {
       fromBucket.currentAmount -= amount
       toBucket.currentAmount += amount
       localStorage.setItem(this.getBucketsKey(userId), JSON.stringify(buckets))
+      
+      // Update database (fire and forget - don't block UI)
+      import('./supabase').then(async ({ bucketService, activityService }) => {
+        try {
+          // Update both bucket balances in database
+          await bucketService.updateBucket(fromBucketId, {
+            current_amount: fromBucket.currentAmount
+          })
+          
+          await bucketService.updateBucket(toBucketId, {
+            current_amount: toBucket.currentAmount
+          })
+          
+          // Log transfer activity to destination bucket
+          await activityService.createActivity({
+            bucket_id: toBucketId,
+            title: `From ${fromBucket.title}`,
+            amount: amount,
+            activity_type: 'money_added',
+            from_source: fromBucket.title,
+            to_destination: toBucket.title,
+            date: new Date().toISOString().split('T')[0],
+            description: `Transferred $${amount} from ${fromBucket.title}`
+          })
+          
+          // Log transfer activity from source bucket
+          await activityService.createActivity({
+            bucket_id: fromBucketId,
+            title: `To ${toBucket.title}`,
+            amount: -amount,
+            activity_type: 'money_removed',
+            from_source: fromBucket.title,
+            to_destination: toBucket.title,
+            date: new Date().toISOString().split('T')[0],
+            description: `Transferred $${amount} to ${toBucket.title}`
+          })
+          
+          console.log('✅ Transfer between buckets saved to database')
+        } catch (err) {
+          console.error('Failed to save transfer to database:', err)
+        }
+      })
     }
 
     console.log('✅ Transfer completed successfully')
