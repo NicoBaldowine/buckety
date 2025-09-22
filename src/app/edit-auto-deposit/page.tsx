@@ -180,6 +180,11 @@ function EditAutoDepositContent() {
 
       // Update auto deposit in localStorage
       const bucketId = searchParams.get('bucket')
+      if (!bucketId) {
+        alert('Missing bucket ID')
+        return
+      }
+      
       if (bucketId) {
         const autoDepositsKey = `auto_deposits_${bucketId}`
         const updatedAutoDeposit = {
@@ -192,7 +197,7 @@ function EditAutoDepositContent() {
           status: 'active',
           user_id: user?.id || '',
           next_execution_date: new Date(Date.now() + (
-            frequency === 'daily' ? 86400000 : 
+            frequency === 'daily' ? 120000 : // 2 minutes for testing
             frequency === 'weekly' ? 604800000 : 
             frequency === 'biweekly' ? 1209600000 :
             2592000000
@@ -202,8 +207,35 @@ function EditAutoDepositContent() {
         localStorage.setItem(autoDepositsKey, JSON.stringify([updatedAutoDeposit]))
       }
       
-      // TODO: Update auto deposit in database
-      // await autoDepositService.updateAutoDeposit(...)
+      // Save auto deposit in database
+      const { autoDepositService } = await import('@/lib/supabase')
+      
+      // First, check if there's an existing auto deposit for this bucket and cancel it
+      const existingAutoDeposits = await autoDepositService.getBucketAutoDeposits(bucketId)
+      for (const existing of existingAutoDeposits) {
+        await autoDepositService.updateAutoDepositStatus(existing.id, 'cancelled')
+      }
+      
+      // Create new auto deposit in database
+      const autoDepositData = {
+        user_id: user?.id || '',
+        bucket_id: bucketId,
+        amount: numericAmount,
+        repeat_type: frequency as any,
+        end_type: endType === 'custom_date' ? 'specific_date' as const : 'bucket_completed' as const,
+        end_date: endType === 'custom_date' ? new Date(customDate).toISOString() : undefined,
+        status: 'active' as const,
+        next_execution_date: autoDepositService.calculateNextExecutionDate(frequency as any)
+      }
+      
+      console.log('💾 Creating auto deposit in database:', autoDepositData)
+      const createdAutoDeposit = await autoDepositService.createAutoDeposit(autoDepositData)
+      
+      if (createdAutoDeposit) {
+        console.log('✅ Auto deposit created successfully in database:', createdAutoDeposit.id)
+      } else {
+        console.error('❌ Failed to create auto deposit in database')
+      }
       
       console.log('Saving auto deposit changes:', {
         amount: numericAmount,

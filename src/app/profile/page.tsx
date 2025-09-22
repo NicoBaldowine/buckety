@@ -75,8 +75,8 @@ export default function ProfilePage() {
           style={{ animation: 'fadeInUp 0.5s ease-out 0.2s both' }}
         >
           <h1 
-            className="text-[32px] font-semibold text-foreground"
-            style={{ letterSpacing: '-0.03em' }}
+            className="text-[32px] font-extrabold text-foreground"
+            style={{ letterSpacing: '-0.05em' }}
           >
             Profile
           </h1>

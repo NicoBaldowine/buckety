@@ -4,39 +4,111 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useRouter } from "next/navigation"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { authService } from "@/lib/auth"
 import Image from "next/image"
 import { Eye, EyeOff } from "lucide-react"
+import { EmailVerification } from "@/components/auth/email-verification"
+import Link from "next/link"
 
 export default function SignUpPage() {
   const router = useRouter()
+  const [currentTheme, setCurrentTheme] = useState<'light' | 'dark'>('light')
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [name, setName] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState("")
   const [showPassword, setShowPassword] = useState(false)
-  const [showEmailConfirmation, setShowEmailConfirmation] = useState(false)
-  const [isResending, setIsResending] = useState(false)
+  const [showEmailVerification, setShowEmailVerification] = useState(false)
+  const [passwordError, setPasswordError] = useState("")
+  
+  // Detect current theme
+  useEffect(() => {
+    const detectTheme = () => {
+      const savedTheme = localStorage.getItem("theme") as "light" | "dark" | null
+      if (savedTheme) {
+        setCurrentTheme(savedTheme)
+      } else {
+        // Use system theme
+        const systemTheme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"
+        setCurrentTheme(systemTheme)
+      }
+    }
+    
+    detectTheme()
+    
+    // Listen for system theme changes
+    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)")
+    const handleChange = () => {
+      const savedTheme = localStorage.getItem("theme")
+      if (!savedTheme) {
+        setCurrentTheme(mediaQuery.matches ? "dark" : "light")
+      }
+    }
+    
+    mediaQuery.addEventListener('change', handleChange)
+    return () => mediaQuery.removeEventListener('change', handleChange)
+  }, [])
+
+  const validatePassword = (password: string): string => {
+    const errors = []
+    
+    if (password.length < 8) {
+      errors.push("at least 8 characters")
+    }
+    if (!/(?=.*[a-z])/.test(password)) {
+      errors.push("one lowercase letter")
+    }
+    if (!/(?=.*[A-Z])/.test(password)) {
+      errors.push("one uppercase letter")
+    }
+    if (!/(?=.*\d)/.test(password)) {
+      errors.push("one number")
+    }
+    
+    if (errors.length === 0) return ""
+    
+    return `Password must contain ${errors.join(", ")}`
+  }
+
+  const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newPassword = e.target.value
+    setPassword(newPassword)
+    
+    if (newPassword) {
+      const error = validatePassword(newPassword)
+      setPasswordError(error)
+    } else {
+      setPasswordError("")
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!email || !password) return
 
+    // Validate password before submitting
+    const passwordValidationError = validatePassword(password)
+    if (passwordValidationError) {
+      setPasswordError(passwordValidationError)
+      return
+    }
+
     setIsSubmitting(true)
     setError("")
+    setPasswordError("")
 
     const result = await authService.signUp(email, password, name)
     
     if (result.success) {
-      // Check if email confirmation is required
+      // Check if email verification is required
       if (result.session) {
-        // User is automatically signed in
-        router.push('/home')
+        // User is automatically signed in - redirect to onboarding for new users
+        router.push('/onboarding')
       } else {
-        // Email confirmation required - show confirmation screen
-        setShowEmailConfirmation(true)
+        // Email verification required - show OTP verification screen
+        setShowEmailVerification(true)
       }
     } else {
       setError(result.error || "Failed to create account")
@@ -65,157 +137,56 @@ export default function SignUpPage() {
     }
   }
 
-  const handleResendEmail = async () => {
-    if (!email) return
-    
-    setIsResending(true)
-    setError("")
+  const handleVerificationComplete = () => {
+    // User has successfully verified their email - redirect to onboarding
+    router.push('/onboarding')
+  }
+
+  const handleResendCode = async () => {
+    if (!email || !password) return
     
     try {
-      // Call sign up again to resend confirmation email
+      // Call sign up again to resend verification code
       const result = await authService.signUp(email, password, name)
-      if (result.success) {
-        setError("")
-        // Show success message briefly
-        setTimeout(() => setError(""), 3000)
-      } else {
-        setError(result.error || "Failed to resend email")
+      if (!result.success) {
+        throw new Error(result.error || "Failed to resend code")
       }
     } catch (error) {
-      console.error('Error resending email:', error)
-      setError("Failed to resend email")
-    } finally {
-      setIsResending(false)
+      console.error('Error resending code:', error)
+      throw error // Let EmailVerification component handle the error display
     }
-  }
-  
-  const handleBackToSignUp = () => {
-    setShowEmailConfirmation(false)
-    setError("")
   }
 
   const isFormValid = () => {
     return email && password && password.length >= 6
   }
 
-  // Show email confirmation screen if needed
-  if (showEmailConfirmation) {
+  // Show email verification screen if needed
+  if (showEmailVerification) {
     return (
-      <div className="min-h-screen bg-background transition-all duration-500 ease-out">
-        <div className="max-w-[520px] mx-auto px-12 py-6 max-sm:px-4 max-sm:py-3 min-h-screen flex items-center">
-          <div className="w-full">
-            {/* Logo */}
-            <div className="flex justify-center mb-10">
-              <div className="relative w-48 h-16">
-                <Image 
-                  src="/zuma-light.svg" 
-                  alt="Zuma Logo" 
-                  fill
-                  className="object-contain dark:hidden"
-                />
-                <Image 
-                  src="/zuma-dark.svg" 
-                  alt="Zuma Logo" 
-                  fill
-                  className="object-contain hidden dark:block"
-                />
-              </div>
-            </div>
-            
-            {/* Header */}
-            <div 
-              className="text-center mb-10"
-              style={{ animation: 'fadeInUp 0.5s ease-out 0.1s both' }}
-            >
-              <h1 
-                className="text-[32px] font-semibold text-foreground mb-4"
-                style={{ letterSpacing: '-0.03em' }}
-              >
-                Check your email
-              </h1>
-              <p className="text-[16px] text-foreground/60 leading-relaxed">
-                We sent a confirmation link to <span className="font-semibold">{email}</span>. 
-                Click the link in your email to complete your registration.
-              </p>
-            </div>
-
-            {/* Error Message */}
-            {error && (
-              <div 
-                className="text-red-500 text-[14px] font-medium text-center mb-6"
-                style={{ animation: 'fadeInUp 0.3s ease-out both' }}
-              >
-                {error}
-              </div>
-            )}
-
-            {/* Action Buttons */}
-            <div 
-              className="space-y-4 mb-8"
-              style={{ animation: 'fadeInUp 0.5s ease-out 0.2s both' }}
-            >
-              <Button 
-                type="button"
-                variant="primary"
-                onClick={handleResendEmail}
-                disabled={isResending}
-                className="w-full"
-              >
-                {isResending ? 'Sending...' : 'Resend confirmation email'}
-              </Button>
-              
-              <Button 
-                type="button"
-                variant="secondary"
-                onClick={handleBackToSignUp}
-                className="w-full"
-              >
-                Back to sign up
-              </Button>
-            </div>
-
-            {/* Already confirmed link */}
-            <div 
-              className="text-center"
-              style={{ animation: 'fadeInUp 0.5s ease-out 0.3s both' }}
-            >
-              <p className="text-[14px] text-foreground/60">
-                Already confirmed your email?{' '}
-                <button 
-                  type="button"
-                  onClick={() => router.push('/login')}
-                  className="text-foreground font-semibold hover:opacity-80 transition-opacity cursor-pointer"
-                >
-                  Sign in
-                </button>
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
+      <EmailVerification
+        email={email}
+        onVerified={handleVerificationComplete}
+        onResend={handleResendCode}
+      />
     )
   }
 
   return (
-    <div className="min-h-screen bg-background transition-all duration-500 ease-out">
+    <div className="min-h-screen bg-background">
       <div className="max-w-[520px] mx-auto px-12 py-6 max-sm:px-4 max-sm:py-3 min-h-screen flex items-center">
         <div className="w-full">
           {/* Logo */}
           <div className="flex justify-center mb-10">
-            <div className="relative w-48 h-16">
+            <Link href="/" className="relative w-48 h-16 cursor-pointer hover:opacity-80 transition-opacity">
               <Image 
-                src="/zuma-light.svg" 
+                src={currentTheme === 'light' ? "/zuma-light.svg" : "/zuma-dark.svg"}
                 alt="Zuma Logo" 
                 fill
-                className="object-contain dark:hidden"
+                className="object-contain"
+                priority
               />
-              <Image 
-                src="/zuma-dark.svg" 
-                alt="Zuma Logo" 
-                fill
-                className="object-contain hidden dark:block"
-              />
-            </div>
+            </Link>
           </div>
           
           {/* Header */}
@@ -224,8 +195,8 @@ export default function SignUpPage() {
             style={{ animation: 'fadeInUp 0.5s ease-out 0.1s both' }}
           >
             <h1 
-              className="text-[32px] font-semibold text-foreground"
-              style={{ letterSpacing: '-0.03em' }}
+              className="text-[32px] font-extrabold text-foreground"
+              style={{ letterSpacing: '-0.05em' }}
             >
               Create account
             </h1>
@@ -263,7 +234,7 @@ export default function SignUpPage() {
           </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form onSubmit={handleSubmit} className="space-y-8">
           {/* Name Field */}
           <div 
             style={{ animation: 'fadeInUp 0.5s ease-out 0.25s both' }}
@@ -305,10 +276,9 @@ export default function SignUpPage() {
                 id="password"
                 type={showPassword ? "text" : "password"}
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={handlePasswordChange}
                 placeholder="Create a password"
                 className="pr-10"
-                minLength={6}
                 required
                 autoComplete="new-password"
               />
@@ -324,6 +294,12 @@ export default function SignUpPage() {
                 )}
               </button>
             </div>
+            {/* Password Error */}
+            {passwordError && (
+              <div className="text-red-500 text-[14px] mt-2">
+                {passwordError}
+              </div>
+            )}
           </div>
 
           {/* Error Message */}

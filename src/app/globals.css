@@ -1,6 +1,7 @@
 @import "tailwindcss";
 
-:root {
+/* Default to light theme to prevent flash */
+:root, html {
   --background: #ffffff;
   --foreground: #171717;
   --primary: #18181b;
@@ -8,6 +9,17 @@
   --secondary: #f4f4f4;
   --secondary-foreground: #4f4f4f;
   --ring: #18181b;
+}
+
+/* Only apply dark theme when explicitly set */
+html[data-theme="dark"] {
+  --background: #1a1a1a;
+  --foreground: #ededed;
+  --primary: #fafafa;
+  --primary-foreground: #18181b;
+  --secondary: #2d2d2d;
+  --secondary-foreground: #b3b3b3;
+  --ring: #fafafa;
 }
 
 @theme inline {
@@ -21,17 +33,7 @@
   --font-sans: var(--font-inter);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #1a1a1a;
-    --foreground: #ededed;
-    --primary: #fafafa;
-    --primary-foreground: #18181b;
-    --secondary: #2d2d2d;
-    --secondary-foreground: #ededed;
-    --ring: #fafafa;
-  }
-}
+/* Remove media query - only use explicit theme setting */
 
 [data-theme="light"] {
   --background: #ffffff;

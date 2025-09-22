@@ -13,32 +13,47 @@ export function ThemeInitializer() {
 
       try {
         if (user?.id) {
-          // User is logged in - load theme from database
+          // User is logged in - try to load theme from database
           console.log('🎨 Loading theme from database for authenticated user:', user.id)
           
-          const { userPreferencesService } = await import('@/lib/supabase')
-          const preferences = await userPreferencesService.getUserPreferences(user.id)
-          
-          if (preferences?.theme) {
-            console.log('✅ Theme loaded from database:', preferences.theme)
+          try {
+            const { userPreferencesService } = await import('@/lib/supabase')
+            const preferences = await Promise.race([
+              userPreferencesService.getUserPreferences(user.id),
+              new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('Theme loading timeout')), 5000)
+              )
+            ]) as any
             
-            if (preferences.theme === 'system') {
-              localStorage.removeItem("theme")
-              const systemTheme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"
-              document.documentElement.setAttribute("data-theme", systemTheme)
+            if (preferences?.theme) {
+              console.log('✅ Theme loaded from database:', preferences.theme)
+              
+              if (preferences.theme === 'system') {
+                localStorage.removeItem("theme")
+                const systemTheme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"
+                document.documentElement.setAttribute("data-theme", systemTheme)
+              } else {
+                localStorage.setItem("theme", preferences.theme)
+                document.documentElement.setAttribute("data-theme", preferences.theme)
+              }
             } else {
-              localStorage.setItem("theme", preferences.theme)
-              document.documentElement.setAttribute("data-theme", preferences.theme)
+              // Fallback to localStorage if database returns null
+              console.log('⚠️ No database theme found, using localStorage fallback')
+              applyLocalStorageTheme()
             }
-          } else {
-            // Fallback to localStorage if database fails
-            console.log('⚠️ No database theme, using localStorage fallback')
+          } catch (error) {
+            // Database connection failed - fallback to localStorage
+            console.warn('⚠️ Failed to load theme from database, using localStorage fallback:', error)
             applyLocalStorageTheme()
           }
         } else {
-          // User not logged in - use localStorage
-          console.log('🔄 User not logged in, using localStorage theme')
-          applyLocalStorageTheme()
+          // User not logged in - keep current theme if already initialized, otherwise use localStorage
+          if (!initialized) {
+            console.log('🔄 User not logged in, using localStorage theme')
+            applyLocalStorageTheme()
+          } else {
+            console.log('🔄 User logged out, keeping current theme to avoid jumps')
+          }
         }
         
         setInitialized(true)

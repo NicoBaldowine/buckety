@@ -1,5 +1,14 @@
 import { createClient } from '@supabase/supabase-js'
 
+// Helper function to get local date in YYYY-MM-DD format
+const getLocalDate = (): string => {
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  const day = String(now.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
 
@@ -71,6 +80,31 @@ const createSupabaseClient = () => {
 
 export const supabase = createSupabaseClient()
 
+// Retry wrapper for database operations
+const withRetry = async <T>(
+  operation: () => Promise<T>,
+  maxRetries: number = 3,
+  delay: number = 1000
+): Promise<T> => {
+  let lastError: any
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await operation()
+    } catch (error) {
+      console.warn(`Database operation failed (attempt ${attempt}/${maxRetries}):`, error)
+      lastError = error
+      
+      if (attempt < maxRetries) {
+        // Wait before retrying, with exponential backoff
+        await new Promise(resolve => setTimeout(resolve, delay * attempt))
+      }
+    }
+  }
+  
+  throw lastError
+}
+
 // Helper function to get current user ID
 export async function getCurrentUserId(): Promise<string | null> {
   try {
@@ -108,6 +142,7 @@ export interface Bucket {
 export interface Activity {
   id: string
   bucket_id: string
+  user_id?: string | null
   activity_type: ActivityType
   title: string
   amount: number
@@ -174,17 +209,23 @@ export const bucketService = {
   
   // Get all buckets for a user
   async getBuckets(userId?: string): Promise<Bucket[]> {
+    // Use provided userId or get current user
+    let targetUserId: string | null = null
+    
     try {
-      // Use provided userId or get current user
-      const targetUserId = userId || await getCurrentUserId()
+      targetUserId = userId || await getCurrentUserId()
       
-      let query = supabase.from('buckets').select('*')
-      
-      if (targetUserId) {
-        query = query.eq('user_id', targetUserId)
+      // Always require userId for data isolation
+      if (!targetUserId) {
+        console.warn('⚠️ getBuckets called without userId - returning empty array for security')
+        return []
       }
       
-      const { data, error } = await query.order('created_at', { ascending: false })
+      const { data, error } = await supabase
+        .from('buckets')
+        .select('*')
+        .eq('user_id', targetUserId)
+        .order('created_at', { ascending: false })
       
       if (error) {
         console.error('Error fetching buckets:', {
@@ -199,48 +240,75 @@ export const bucketService = {
       
       return data || []
     } catch (error) {
-      console.error('Error fetching buckets:', error)
+      console.error('Error fetching buckets:', {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        error: error,
+        userId: targetUserId || userId || 'undefined'
+      })
       return []
     }
   },
 
   // Create a new bucket and log creation activity
   async createBucket(bucket: Omit<Bucket, 'id' | 'created_at' | 'updated_at'>): Promise<Bucket | null> {
-    try {
-      // Ensure we have a user_id
-      const bucketWithUserId = {
-        ...bucket,
-        user_id: bucket.user_id || await getCurrentUserId()
+    // Use reduced retry for bucket creation to avoid long waits (1 retry, 500ms delay)
+    return withRetry(async () => {
+      try {
+        // Ensure we have a user_id
+        const bucketWithUserId = {
+          ...bucket,
+          user_id: bucket.user_id || await getCurrentUserId()
+        }
+        
+        console.log('Creating bucket in database:', bucketWithUserId)
+        
+        // Add timeout to prevent hanging (15 seconds for bucket creation)
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Bucket creation timeout')), 15000)
+        )
+        
+        const createPromise = supabase
+          .from('buckets')
+          .insert([bucketWithUserId])
+          .select()
+          .single()
+        
+        const { data, error } = await Promise.race([
+          createPromise,
+          timeoutPromise
+        ]) as any
+        
+        if (error) {
+          console.error('Error creating bucket:', error)
+          throw error // Throw to trigger retry
+        }
+        
+        // Log bucket creation activity
+        if (data) {
+          try {
+            await activityService.createActivity({
+              bucket_id: data.id,
+              activity_type: 'bucket_created',
+              title: 'Bucket created',
+              amount: 0,
+              date: getLocalDate(),
+              description: `${data.title} bucket was created with target of $${data.target_amount.toLocaleString()}`
+            })
+          } catch (activityError) {
+            console.warn('Failed to log bucket creation activity:', activityError)
+            // Don't fail bucket creation if activity logging fails
+          }
+        }
+        
+        return data
+      } catch (error) {
+        console.error('Error in createBucket:', error)
+        throw error // Re-throw to trigger retry
       }
-      
-      const { data, error } = await supabase
-        .from('buckets')
-        .insert([bucketWithUserId])
-        .select()
-        .single()
-      
-      if (error) {
-        console.error('Error creating bucket:', error)
-        return null
-      }
-      
-      // Log bucket creation activity
-      if (data) {
-        await activityService.createActivity({
-          bucket_id: data.id,
-          activity_type: 'bucket_created',
-          title: 'Bucket created',
-          amount: 0,
-          date: new Date().toISOString().split('T')[0],
-          description: `${data.title} bucket was created with target of $${data.target_amount.toLocaleString()}`
-        })
-      }
-      
-      return data
-    } catch (error) {
-      console.error('Error creating bucket:', error)
+    }, 1, 500).catch(error => {
+      console.error('Failed to create bucket after retry:', error)
       return null
-    }
+    })
   },
 
   // Update a bucket
@@ -324,28 +392,80 @@ export const bucketService = {
 }
 
 export const activityService = {
-  // Get activities for a bucket
-  async getActivities(bucketId: string): Promise<Activity[]> {
-    const { data, error } = await supabase
-      .from('activities')
-      .select('*')
-      .eq('bucket_id', bucketId)
-      .order('created_at', { ascending: false })
-    
-    if (error) {
+  // Get activities for a bucket (with user verification)
+  async getActivities(bucketId: string, userId?: string): Promise<Activity[]> {
+    try {
+      // Use provided userId or get current user
+      const targetUserId = userId || await getCurrentUserId()
+      
+      // Always require userId for data isolation
+      if (!targetUserId) {
+        console.warn('⚠️ getActivities called without userId - returning empty array for security')
+        return []
+      }
+      
+      // Join with buckets table to ensure user owns the bucket
+      const { data, error } = await supabase
+        .from('activities')
+        .select(`
+          *,
+          bucket:buckets!inner(user_id)
+        `)
+        .eq('bucket_id', bucketId)
+        .eq('bucket.user_id', targetUserId)
+        .order('created_at', { ascending: false })
+        .order('date', { ascending: false })
+      
+      if (error) {
+        console.warn('Error fetching activities for bucket:', bucketId, {
+          message: error?.message || 'Unknown error',
+          code: error?.code,
+          details: error?.details,
+          hint: error?.hint
+        })
+        return []
+      }
+      
+      return data || []
+    } catch (error) {
       console.error('Error fetching activities:', error)
       return []
     }
-    
-    return data || []
   },
 
-  // Create a new activity
-  async createActivity(activity: Omit<Activity, 'id' | 'created_at'>): Promise<Activity | null> {
+  // Create a new activity with user verification
+  async createActivity(activity: Omit<Activity, 'id' | 'created_at'> & { user_id?: string }): Promise<Activity | null> {
     try {
+      // Ensure we have a user_id for security
+      const userId = activity.user_id || await getCurrentUserId()
+      if (!userId) {
+        console.warn('⚠️ createActivity called without userId - skipping for security')
+        return null
+      }
+      
+      // Verify user owns the bucket before creating activity
+      if (activity.bucket_id) {
+        const { data: bucketCheck, error: bucketError } = await supabase
+          .from('buckets')
+          .select('user_id')
+          .eq('id', activity.bucket_id)
+          .eq('user_id', userId)
+          .single()
+        
+        if (bucketError || !bucketCheck) {
+          console.warn('⚠️ User does not own bucket, cannot create activity:', activity.bucket_id)
+          return null
+        }
+      }
+      
+      const activityWithUserId = {
+        ...activity,
+        user_id: userId
+      }
+      
       const { data, error } = await supabase
         .from('activities')
-        .insert([activity])
+        .insert([activityWithUserId])
         .select()
         .single()
       
@@ -370,7 +490,7 @@ export const activityService = {
       title: `From ${fromSource}`,
       amount,
       from_source: fromSource,
-      date: new Date().toISOString().split('T')[0],
+      date: getLocalDate(),
       description: description || `Transferred $${amount.toLocaleString()} from ${fromSource}`
     })
   },
@@ -383,7 +503,7 @@ export const activityService = {
       title: `To ${toDestination}`,
       amount: -Math.abs(amount), // Ensure negative for removals
       to_destination: toDestination,
-      date: new Date().toISOString().split('T')[0],
+      date: getLocalDate(),
       description: description || `Transferred $${amount.toLocaleString()} to ${toDestination}`
     })
   },
@@ -395,7 +515,7 @@ export const activityService = {
       activity_type: 'withdrawal',
       title: 'Withdrawal',
       amount: -Math.abs(amount), // Ensure negative for withdrawals
-      date: new Date().toISOString().split('T')[0],
+      date: getLocalDate(),
       description: description || `Withdrew $${amount.toLocaleString()} from bucket`
     })
   },
@@ -407,7 +527,7 @@ export const activityService = {
       activity_type: 'apy_earnings',
       title: 'Interest earned',
       amount,
-      date: new Date().toISOString().split('T')[0],
+      date: getLocalDate(),
       description: `Monthly interest earned at ${apyRate}% APY`
     })
   },
@@ -420,7 +540,7 @@ export const activityService = {
       title: 'Auto-deposit',
       amount,
       from_source: fromSource,
-      date: new Date().toISOString().split('T')[0],
+      date: getLocalDate(),
       description: `Automatic deposit of $${amount.toLocaleString()} from ${fromSource}`
     })
   },
@@ -432,7 +552,7 @@ export const activityService = {
       activity_type: 'auto_deposit_started',
       title: 'Auto deposit setup',
       amount: 0, // No money moved at setup
-      date: new Date().toISOString().split('T')[0],
+      date: getLocalDate(),
       description: `Set up ${frequency} auto-deposit of $${amount.toLocaleString()}`
     })
   },
@@ -469,13 +589,17 @@ export const mainBucketService = {
   // Get main bucket for a user
   async getMainBucket(userId?: string): Promise<MainBucket | null> {
     try {
-      let query = supabase.from('main_bucket').select('*')
-      
-      if (userId) {
-        query = query.eq('user_id', userId)
+      // Always require userId for data isolation
+      if (!userId) {
+        console.warn('⚠️ getMainBucket called without userId - returning null for security')
+        return null
       }
       
-      const { data, error } = await query.single()
+      const { data, error } = await supabase
+        .from('main_bucket')
+        .select('*')
+        .eq('user_id', userId)
+        .single()
       
       if (error) {
         // For testing without authentication, gracefully handle missing main bucket
@@ -531,6 +655,24 @@ export const mainBucketService = {
       // Update destination bucket balance
       const newBucketBalance = toBucket.current_amount + amount
       await bucketService.updateBucket(toBucketId, { current_amount: newBucketBalance })
+      
+      // Create activity record for Main Bucket (money going out)
+      try {
+        await activityService.createActivity({
+          bucket_id: 'main-bucket',
+          user_id: userId,
+          title: `To ${toBucket.title}`,
+          amount: -amount, // Negative because money is leaving
+          activity_type: 'money_removed',
+          from_source: 'Main Bucket',
+          to_destination: toBucket.title,
+          date: new Date().toISOString().split('T')[0],
+          description: `Transfer to ${toBucket.title}`
+        })
+      } catch (activityError) {
+        console.warn('Failed to create Main Bucket activity:', activityError)
+        // Don't fail the transfer if activity creation fails
+      }
       
       return { success: true }
     } catch (error) {
@@ -599,8 +741,8 @@ export const transferService = {
         return { success: false, error: 'Failed to update bucket' }
       }
 
-      // Log the activity (log the transfer amount, not total)
-      await activityService.logMoneyAdded(bucketId, transferAmount, 'Main Bucket')
+      // Activity is already logged in HybridStorage.transferMoney - don't create duplicate
+      // await activityService.logMoneyAdded(bucketId, transferAmount, 'Main Bucket')
       
       // Update main bucket (decrease by transfer amount)
       if (userId) {
@@ -809,7 +951,7 @@ export const autoDepositService = {
 
   // Get auto deposits for a specific bucket
   async getBucketAutoDeposits(bucketId: string): Promise<AutoDeposit[]> {
-    try {
+    return withRetry(async () => {
       console.log('🔍 Fetching auto deposits for bucket:', bucketId)
       
       // Check authentication first
@@ -828,11 +970,12 @@ export const autoDepositService = {
       
       if (error) {
         console.error('❌ Error fetching bucket auto deposits:', error)
-        console.error('Error details:', {
-          message: error.message,
-          details: error.details,
-          hint: error.hint,
-          code: error.code
+        console.error('❌ Full error object:', JSON.stringify(error, null, 2))
+        console.error('❌ Error details:', {
+          message: error?.message || 'No message',
+          code: error?.code || 'No code',
+          details: error?.details || 'No details',
+          hint: error?.hint || 'No hint'
         })
         
         // Check if table doesn't exist (common during development)
@@ -843,15 +986,16 @@ export const autoDepositService = {
         if (error.message?.includes('permission denied') || error.message?.includes('RLS')) {
           console.error('💡 Permission denied on bucket query. Check RLS policies.')
         }
-        return []
+        
+        throw error
       }
       
       console.log('📋 Found auto deposits for bucket:', data ? data.length : 0, data)
       return data || []
-    } catch (error) {
-      console.error('❌ Unexpected error fetching bucket auto deposits:', error)
+    }).catch(error => {
+      console.warn('⚠️ Failed to fetch bucket auto deposits after retries, returning empty array:', error)
       return []
-    }
+    })
   },
 
   // Get auto deposit by ID
@@ -887,7 +1031,8 @@ export const autoDepositService = {
     
     switch (repeatType) {
       case 'daily':
-        nextDate.setDate(now.getDate() + 1)
+        // For testing: set to 1 minute ago so it's immediately due
+        nextDate.setTime(now.getTime() - 60 * 1000) // 1 minute in the past for immediate execution
         break
       case 'weekly':
         nextDate.setDate(now.getDate() + 7)
@@ -909,7 +1054,7 @@ export const autoDepositService = {
         nextDate.setDate(now.getDate() + 7)
     }
     
-    return nextDate.toISOString().split('T')[0]
+    return nextDate.toISOString() // Full timestamp for testing
   },
 
   // Update auto deposit status
@@ -986,16 +1131,54 @@ export const autoDepositService = {
   // Execute auto deposits that are due
   async executeAutoDeposits(userId?: string): Promise<{ success: boolean; executed: number; error?: string }> {
     try {
-      const today = new Date()
-      today.setHours(0, 0, 0, 0)
+      const now = new Date()
       
-      // Get all active auto deposits that are due
-      const { data: dueDeposits, error } = await supabase
+      // Use provided userId or get current user for data isolation
+      const targetUserId = userId || await getCurrentUserId()
+      
+      // Get all active auto deposits that are due for this user (using full timestamp for testing)
+      console.log('🕐 Current time:', now.toISOString())
+      console.log('🔍 Checking auto deposits for user:', targetUserId)
+      
+      // First, get all active auto deposits to see their next execution dates
+      let debugQuery = supabase
         .from('auto_deposits')
         .select('*')
         .eq('status', 'active')
-        .lte('next_execution_date', today.toISOString().split('T')[0])
         .order('created_at', { ascending: true })
+      
+      if (targetUserId) {
+        debugQuery = debugQuery.eq('user_id', targetUserId)
+      }
+      
+      const { data: allAutoDeposits } = await debugQuery
+      console.log('🔍 All active auto deposits:', allAutoDeposits)
+      allAutoDeposits?.forEach((d, index) => {
+        console.log(`🔍 Auto deposit ${index + 1}:`, {
+          id: d.id,
+          amount: d.amount,
+          next_execution_date: d.next_execution_date,
+          repeat_type: d.repeat_type,
+          status: d.status,
+          created_at: d.created_at
+        })
+        console.log(`⏰ Next execution: ${d.next_execution_date} vs Current: ${now.toISOString()}`)
+        console.log(`⏰ Is due? ${new Date(d.next_execution_date) <= now}`)
+      })
+      
+      let query = supabase
+        .from('auto_deposits')
+        .select('*')
+        .eq('status', 'active')
+        .lte('next_execution_date', now.toISOString())
+        .order('created_at', { ascending: true })
+      
+      // Filter by user if userId is provided (for security)
+      if (targetUserId) {
+        query = query.eq('user_id', targetUserId)
+      }
+      
+      const { data: dueDeposits, error } = await query
       
       if (error) {
         console.error('Error fetching due auto deposits:', error)
@@ -1003,8 +1186,17 @@ export const autoDepositService = {
       }
       
       if (!dueDeposits || dueDeposits.length === 0) {
+        console.log('📅 No auto deposits due for execution')
         return { success: true, executed: 0 }
       }
+      
+      console.log(`📋 Found ${dueDeposits.length} auto deposits due for execution:`, dueDeposits.map(d => ({
+        id: d.id,
+        amount: d.amount,
+        bucket_id: d.bucket_id,
+        next_execution_date: d.next_execution_date,
+        repeat_type: d.repeat_type
+      })))
       
       let executedCount = 0
       
@@ -1025,7 +1217,7 @@ export const autoDepositService = {
           // Skip if end date has passed
           if (autoDeposit.end_type === 'specific_date' && 
               autoDeposit.end_date && 
-              new Date(autoDeposit.end_date) < today) {
+              new Date(autoDeposit.end_date) < now) {
             await this.updateAutoDepositStatus(autoDeposit.id, 'completed')
             continue
           }
@@ -1038,23 +1230,37 @@ export const autoDepositService = {
           )
           
           if (transferResult.success) {
-            // Create activity record for the auto deposit
+            // Create activity record for the auto deposit with time
+            const timeString = now.toLocaleTimeString('en-US', { 
+              hour: '2-digit', 
+              minute: '2-digit',
+              hour12: true 
+            })
             await activityService.createActivity({
               bucket_id: autoDeposit.bucket_id,
-              title: 'Auto deposited',
+              title: `Auto deposited at ${timeString}`,
               amount: autoDeposit.amount,
               activity_type: 'auto_deposit',
               from_source: 'Main Bucket',
               to_destination: bucket.title,
-              date: today.toISOString().split('T')[0],
-              description: `Auto deposit of $${autoDeposit.amount}`
+              date: now.toISOString().split('T')[0],
+              description: `Auto deposit of $${autoDeposit.amount} at ${timeString}`
+            })
+            
+            // Create notification for the auto deposit
+            await notificationService.createNotification({
+              user_id: autoDeposit.user_id,
+              title: 'Auto Deposit Complete',
+              message: `Auto deposit of $${autoDeposit.amount} to ${bucket.title}`,
+              type: 'auto_deposit',
+              bucket_id: autoDeposit.bucket_id
             })
             
             // Calculate next execution date
             let nextDate = new Date(autoDeposit.next_execution_date)
             switch (autoDeposit.repeat_type) {
               case 'daily':
-                nextDate.setDate(nextDate.getDate() + 1)
+                nextDate.setTime(nextDate.getTime() + 2 * 60 * 1000) // 2 minutes for testing
                 break
               case 'weekly':
                 nextDate.setDate(nextDate.getDate() + 7)
@@ -1072,9 +1278,9 @@ export const autoDepositService = {
                 break
             }
             
-            // Update next execution date
+            // Update next execution date (full timestamp for testing)
             await this.updateAutoDeposit(autoDeposit.id, {
-              next_execution_date: nextDate.toISOString().split('T')[0]
+              next_execution_date: nextDate.toISOString()
             })
             
             executedCount++
@@ -1096,7 +1302,7 @@ export const autoDepositService = {
 export const userPreferencesService = {
   // Get user preferences
   async getUserPreferences(userId: string): Promise<UserPreferences | null> {
-    try {
+    return withRetry(async () => {
       console.log('🔍 Fetching user preferences for user:', userId)
       
       // Check authentication first
@@ -1104,7 +1310,7 @@ export const userPreferencesService = {
       
       if (authError) {
         console.error('❌ Authentication error:', authError)
-        return null
+        throw new Error(`Authentication failed: ${authError.message}`)
       }
       
       console.log('👤 User authenticated for preferences fetch:', {
@@ -1115,7 +1321,7 @@ export const userPreferencesService = {
       
       if (!user || user.id !== userId) {
         console.error('❌ User not authenticated or ID mismatch')
-        return null
+        throw new Error('User authentication mismatch')
       }
       
       const { data, error } = await supabase
@@ -1148,15 +1354,15 @@ export const userPreferencesService = {
           console.error('💡 Permission denied on preferences fetch. Check RLS policies.')
         }
         
-        return null
+        throw error
       }
       
       console.log('✅ User preferences loaded:', data)
       return data
-    } catch (error) {
-      console.error('❌ Unexpected error fetching user preferences:', error)
+    }).catch(error => {
+      console.error('❌ Failed to fetch user preferences after retries:', error)
       return null
-    }
+    })
   },
 
   // Create user preferences
@@ -1231,25 +1437,30 @@ export const userPreferencesService = {
     try {
       console.log('🔧 Updating user preferences:', { userId, updates })
       
+      // Use upsert to create if doesn't exist, update if exists
       const { data, error } = await supabase
         .from('user_preferences')
-        .update({
+        .upsert({
+          user_id: userId,
           ...updates,
           updated_at: new Date().toISOString()
+        }, {
+          onConflict: 'user_id'
         })
-        .eq('user_id', userId)
         .select()
         .single()
       
       if (error) {
-        console.error('❌ Error updating user preferences:', error)
+        // If upsert fails, it might be because the table doesn't exist
+        // Just log a warning instead of an error since theme still works via localStorage
+        console.warn('⚠️ Could not save theme to database (table may not exist), but theme is saved locally')
         return null
       }
       
       console.log('✅ User preferences updated successfully:', data)
       return data
     } catch (error) {
-      console.error('❌ Unexpected error updating user preferences:', error)
+      console.warn('⚠️ Could not save theme to database, but theme is saved locally')
       return null
     }
   },
@@ -1258,5 +1469,179 @@ export const userPreferencesService = {
   async updateUserTheme(userId: string, theme: 'light' | 'dark' | 'system'): Promise<UserPreferences | null> {
     console.log('🎨 Updating user theme:', { userId, theme })
     return await this.updateUserPreferences(userId, { theme })
+  }
+}
+
+// Notification types and service
+export interface Notification {
+  id: string
+  user_id: string
+  type: 'auto_deposit' | 'manual_deposit' | 'withdrawal' | 'goal_reached'
+  title: string
+  message: string
+  amount?: number
+  bucket_id?: string
+  is_read: boolean
+  created_at: string
+  read_at?: string
+  metadata?: {
+    deposit_id?: string
+    bucket_name?: string
+    bucket_color?: string
+  }
+}
+
+export const notificationService = {
+  // Get all notifications for a user
+  async getNotifications(userId?: string): Promise<Notification[]> {
+    try {
+      const targetUserId = userId || await getCurrentUserId()
+      
+      if (!targetUserId) {
+        console.warn('⚠️ getNotifications called without userId')
+        return []
+      }
+      
+      const { data, error } = await supabase
+        .from('notifications')
+        .select('*')
+        .eq('user_id', targetUserId)
+        .order('created_at', { ascending: false })
+      
+      if (error) {
+        console.error('Error fetching notifications:', error)
+        return []
+      }
+      
+      return data || []
+    } catch (error) {
+      console.error('Error fetching notifications:', error)
+      return []
+    }
+  },
+
+  // Get unread notification count
+  async getUnreadCount(userId?: string): Promise<number> {
+    try {
+      const targetUserId = userId || await getCurrentUserId()
+      
+      if (!targetUserId) {
+        return 0
+      }
+      
+      const { data, error } = await supabase
+        .rpc('get_unread_notification_count')
+      
+      if (error) {
+        console.error('Error fetching unread count:', error)
+        return 0
+      }
+      
+      return data || 0
+    } catch (error) {
+      console.error('Error fetching unread count:', error)
+      return 0
+    }
+  },
+
+  // Mark notifications as read
+  async markAsRead(notificationIds: string[]): Promise<boolean> {
+    try {
+      const { error } = await supabase
+        .rpc('mark_notifications_read', { notification_ids: notificationIds })
+      
+      if (error) {
+        console.error('Error marking notifications as read:', error)
+        return false
+      }
+      
+      return true
+    } catch (error) {
+      console.error('Error marking notifications as read:', error)
+      return false
+    }
+  },
+
+  // Mark all notifications as read
+  async markAllAsRead(userId?: string): Promise<boolean> {
+    try {
+      const targetUserId = userId || await getCurrentUserId()
+      
+      if (!targetUserId) {
+        return false
+      }
+      
+      const { error } = await supabase
+        .from('notifications')
+        .update({ 
+          is_read: true, 
+          read_at: new Date().toISOString() 
+        })
+        .eq('user_id', targetUserId)
+        .eq('is_read', false)
+      
+      if (error) {
+        console.error('Error marking all notifications as read:', error)
+        return false
+      }
+      
+      return true
+    } catch (error) {
+      console.error('Error marking all notifications as read:', error)
+      return false
+    }
+  },
+
+  // Create a new notification
+  async createNotification(notification: {
+    user_id: string
+    title: string
+    message: string
+    type?: string
+    bucket_id?: string
+  }): Promise<boolean> {
+    try {
+      const { error } = await supabase
+        .from('notifications')
+        .insert({
+          user_id: notification.user_id,
+          title: notification.title,
+          message: notification.message,
+          type: notification.type || 'auto_deposit',
+          bucket_id: notification.bucket_id,
+          is_read: false,
+          created_at: new Date().toISOString()
+        })
+
+      if (error) {
+        console.error('Error creating notification:', error)
+        return false
+      }
+
+      return true
+    } catch (error) {
+      console.error('Error creating notification:', error)
+      return false
+    }
+  },
+
+  // Subscribe to new notifications (real-time)
+  subscribeToNotifications(userId: string, callback: (notification: Notification) => void) {
+    return supabase
+      .channel(`notifications:${userId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'notifications',
+          filter: `user_id=eq.${userId}`
+        },
+        (payload) => {
+          console.log('New notification received:', payload.new)
+          callback(payload.new as Notification)
+        }
+      )
+      .subscribe()
   }
 }

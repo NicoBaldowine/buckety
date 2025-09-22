@@ -44,8 +44,9 @@ const BUCKET_COLORS = [
 const WHY_ZUMA_OPTIONS = [
   { title: "Save for specific goals" },
   { title: "Better spending control" },
-  { title: "Earn while you save" },
+  { title: "Access exclusive discounts" },
   { title: "Organize my finances" },
+  { title: "Get saving reports" },
 ]
 
 
@@ -67,31 +68,102 @@ function OnboardingContent() {
   const [bucketColor, setBucketColor] = useState(BUCKET_COLORS[0].value)
   const [isCreatingBucket, setIsCreatingBucket] = useState(false)
   const [bankConnected, setBankConnected] = useState(false)
+  const [isCheckingUserStatus, setIsCheckingUserStatus] = useState(true)
 
   // Check if user should see onboarding
   useEffect(() => {
-    if (user?.id) {
-      const hasCompletedOnboarding = localStorage.getItem(`onboarding_completed_${user.id}`)
-      
-      // Check if this is from email confirmation - if so, always show onboarding
-      const urlParams = new URLSearchParams(window.location.search)
-      const isFromEmailConfirmation = urlParams.get('from') === 'email_confirmation'
-      
-      // If user came from email confirmation, clear any existing onboarding flag and stay here
-      if (isFromEmailConfirmation) {
-        console.log('User came from email confirmation - showing onboarding')
-        // Clear the onboarding flag to ensure they go through the process
-        localStorage.removeItem(`onboarding_completed_${user.id}`)
+    const checkUserStatus = async () => {
+      if (!user?.id) {
+        setIsCheckingUserStatus(false)
         return
       }
-      
-      // If user has completed onboarding and didn't come from email confirmation, redirect to home
-      if (hasCompletedOnboarding === 'true') {
-        console.log('User has completed onboarding - redirecting to home')
-        router.push('/home')
-        return
+
+      try {
+        // Check if this is from email confirmation
+        const urlParams = new URLSearchParams(window.location.search)
+        const isFromEmailConfirmation = urlParams.get('from') === 'email_confirmation'
+        
+        // FIRST: Quick check localStorage for immediate response
+        const userBuckets = HybridStorage.getLocalBuckets(user.id)
+        const hasBucketsLocally = userBuckets && userBuckets.length > 0
+        const hasCompletedOnboarding = localStorage.getItem(`onboarding_completed_${user.id}`)
+        
+        // If user has buckets locally and NOT from email confirmation -> redirect immediately
+        if (hasBucketsLocally && !isFromEmailConfirmation) {
+          console.log('🚀 Quick redirect: User has buckets locally - going to home')
+          router.replace('/home')
+          return
+        }
+        
+        // If user completed onboarding and has local buckets -> redirect immediately  
+        if (hasCompletedOnboarding === 'true' && hasBucketsLocally) {
+          console.log('🚀 Quick redirect: User completed onboarding with buckets - going to home')
+          router.replace('/home')
+          return
+        }
+        
+        // SECOND: Check database for definitive answer
+        let hasBucketsInDB = false
+        try {
+          const dbBuckets = await HybridStorage.getAllBuckets(user.id)
+          hasBucketsInDB = dbBuckets && dbBuckets.length > 0
+        } catch (error) {
+          console.warn('Could not check database buckets:', error)
+          hasBucketsInDB = false
+        }
+        
+        const hasBuckets = hasBucketsInDB || hasBucketsLocally
+        
+        console.log('🎯 Onboarding check:', {
+          hasBucketsInDB,
+          hasBucketsLocally,
+          hasBuckets,
+          hasCompletedOnboarding,
+          isFromEmailConfirmation,
+          userId: user.id
+        })
+        
+        // If user has buckets in database -> redirect to home
+        if (hasBucketsInDB) {
+          console.log('User has buckets in database - existing user, redirecting to home')
+          router.replace('/home')
+          return
+        }
+        
+        // If user came from email confirmation but already has buckets -> redirect to home
+        if (isFromEmailConfirmation && hasBuckets) {
+          console.log('User came from email confirmation but already has buckets - redirecting to home')
+          router.replace('/home')
+          return
+        }
+        
+        // If user came from email confirmation and has no buckets -> show onboarding
+        if (isFromEmailConfirmation && !hasBuckets) {
+          console.log('User came from email confirmation and has no buckets - showing onboarding')
+          localStorage.removeItem(`onboarding_completed_${user.id}`)
+          setIsCheckingUserStatus(false)
+          return
+        }
+        
+        // If user has completed onboarding but has no buckets -> show onboarding
+        if (hasCompletedOnboarding === 'true' && !hasBuckets) {
+          console.log('User completed onboarding but has no buckets - showing onboarding again')
+          localStorage.removeItem(`onboarding_completed_${user.id}`)
+          setIsCheckingUserStatus(false)
+          return
+        }
+        
+        // If we get here, user needs onboarding
+        console.log('User needs onboarding - staying on onboarding page')
+        setIsCheckingUserStatus(false)
+        
+      } catch (error) {
+        console.error('Error checking user status:', error)
+        setIsCheckingUserStatus(false)
       }
     }
+    
+    checkUserStatus()
   }, [user, router])
 
   const handleReasonToggle = (title: string) => {
@@ -150,6 +222,18 @@ function OnboardingContent() {
 
   const canContinueStep1 = selectedReasons.length > 0
   const canContinueStep3 = bucketName && bucketTarget
+
+  // Show loading screen while checking user status
+  if (isCheckingUserStatus) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-foreground mx-auto mb-4"></div>
+          <p className="text-foreground/60 text-sm">Loading...</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-background transition-all duration-500 ease-out">

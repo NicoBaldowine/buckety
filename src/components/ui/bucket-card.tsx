@@ -77,7 +77,7 @@ const BucketCard = React.forwardRef<HTMLDivElement, BucketCardProps>(
         
         {/* Header with title */}
         <div className="mb-0">
-          <h3 className="text-[20px] font-semibold tracking-tight text-black">
+          <h3 className="text-[24px] font-extrabold text-black" style={{ letterSpacing: '-0.04em' }}>
             {title}
           </h3>
         </div>
@@ -85,10 +85,10 @@ const BucketCard = React.forwardRef<HTMLDivElement, BucketCardProps>(
         {/* Amount section */}
         <div className="mb-4">
           <div className="flex items-baseline gap-1">
-            <span className="text-[24px] font-semibold tracking-tight text-black">
+            <span className="text-[20px] font-semibold tracking-tight text-black">
               ${currentAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </span>
-            <span className="text-[24px] font-semibold tracking-tight text-black/40">
+            <span className="text-[20px] font-semibold tracking-tight text-black/40">
               of ${targetAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </span>
           </div>

@@ -43,8 +43,8 @@ export function Modal({ isOpen, onClose, title, children, className, fullScreen 
             >
               {title && (
                 <h1 
-                  className="text-[40px] font-semibold text-foreground"
-                  style={{ letterSpacing: '-0.03em' }}
+                  className="text-[40px] font-extrabold text-foreground"
+                  style={{ letterSpacing: '-0.05em' }}
                 >
                   {title}
                 </h1>
@@ -89,8 +89,8 @@ export function Modal({ isOpen, onClose, title, children, className, fullScreen 
         >
           {title && (
             <h2 
-              className="text-[32px] font-semibold text-foreground mb-6"
-              style={{ letterSpacing: '-0.03em' }}
+              className="text-[32px] font-extrabold text-foreground mb-6"
+              style={{ letterSpacing: '-0.05em' }}
             >
               {title}
             </h2>
@@ -144,8 +144,8 @@ export function ConfirmationModal({
     <Modal isOpen={isOpen} onClose={onClose}>
       <div>
         <h2 
-          className="text-[32px] font-semibold text-foreground mb-3"
-          style={{ letterSpacing: '-0.03em' }}
+          className="text-[32px] font-extrabold text-foreground mb-3"
+          style={{ letterSpacing: '-0.05em' }}
         >
           {title}
         </h2>

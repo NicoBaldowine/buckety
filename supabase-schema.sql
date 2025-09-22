@@ -151,25 +151,7 @@ CREATE TRIGGER update_main_bucket_updated_at
 -- Insert some sample data for testing (optional)
 -- Note: This will only work if you have authentication disabled or are logged in
 
--- Sample buckets
--- INSERT INTO buckets (title, current_amount, target_amount, background_color, apy) VALUES
---   ('Vacation Fund 🏖️', 1250, 3000, '#B6F3AD', 3.8),
---   ('Emergency Fund 🚨', 890, 2000, '#BFB0FF', 4.2),
---   ('New Car 🚗', 2300, 8000, '#FDB86A', 3.5),
---   ('Electronic Drumset 🥁', 675, 1500, '#FF97D0', 4.0),
---   ('Gaming Setup 🎮', 420, 2500, '#A3D5FF', 3.9),
---   ('Coffee Shop Business ☕', 1800, 5000, '#FFB366', 4.1);
-
--- Sample activities for the first bucket showing different activity types
--- (update bucket_id as needed)
--- INSERT INTO activities (bucket_id, activity_type, title, amount, from_source, to_destination, date, description) VALUES
---   ((SELECT id FROM buckets WHERE title LIKE 'Vacation Fund%' LIMIT 1), 'bucket_created', 'Bucket created', 0, null, null, '2024-11-01', 'Vacation Fund bucket was created with target of $3,000'),
---   ((SELECT id FROM buckets WHERE title LIKE 'Vacation Fund%' LIMIT 1), 'money_added', 'Money transfer', 200, 'Main Bucket', null, '2024-12-15', 'Monthly savings transfer'),
---   ((SELECT id FROM buckets WHERE title LIKE 'Vacation Fund%' LIMIT 1), 'money_added', 'Bonus allocation', 500, 'Main Bucket', null, '2024-12-10', 'End of year bonus added'),
---   ((SELECT id FROM buckets WHERE title LIKE 'Vacation Fund%' LIMIT 1), 'auto_deposit', 'Weekly auto-deposit', 50, 'Main Bucket', null, '2024-12-08', 'Automatic weekly savings'),
---   ((SELECT id FROM buckets WHERE title LIKE 'Vacation Fund%' LIMIT 1), 'apy_earnings', 'Interest earned', 12.50, null, null, '2024-12-01', 'Monthly interest at 3.8% APY'),
---   ((SELECT id FROM buckets WHERE title LIKE 'Vacation Fund%' LIMIT 1), 'money_removed', 'Partial withdrawal', -100, null, 'Main Bucket', '2024-11-20', 'Emergency expense coverage'),
---   ((SELECT id FROM buckets WHERE title LIKE 'Vacation Fund%' LIMIT 1), 'money_added', 'Initial deposit', 500, 'Main Bucket', null, '2024-11-01', 'Starting the vacation savings');
+-- Sample data is handled by the application, not inserted via SQL
 
 -- Insert default main bucket
 -- INSERT INTO main_bucket (current_amount) VALUES (1200.00);

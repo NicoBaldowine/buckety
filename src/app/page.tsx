@@ -27,6 +27,7 @@ export default function LandingPage() {
       router.push('/home?demo=true')
       return
     }
+
     
     // If user is already authenticated, redirect to home
     if (!loading && user) {
@@ -189,8 +190,8 @@ export default function LandingPage() {
           <div className="max-w-2xl">
             {/* Main Heading */}
             <h1 
-              className="text-[56px] font-medium text-white leading-[1.1] mb-6" 
-              style={{ letterSpacing: '-0.03em', animation: 'fadeInUp 0.5s ease-out 0.2s both' }}
+              className="text-[56px] font-extrabold text-white leading-[1.1] mb-6" 
+              style={{ fontFamily: 'Inter, sans-serif', letterSpacing: '-0.05em', animation: 'fadeInUp 0.5s ease-out 0.2s both' }}
             >
               Modern savings account.<br />
               Personalized to you.
@@ -285,8 +286,8 @@ export default function LandingPage() {
               }}
             >
               <h2 
-                className="text-[48px] font-medium text-[#1A1A1A] leading-[1.1] mb-6" 
-                style={{ letterSpacing: '-0.03em' }}
+                className="text-[48px] font-extrabold text-[#1A1A1A] leading-[1.1] mb-6" 
+                style={{ fontFamily: 'Inter, sans-serif', letterSpacing: '-0.05em' }}
               >
                 Create custom buckets.<br />
                 Track everything.
@@ -330,8 +331,8 @@ export default function LandingPage() {
               }}
             >
               <h2 
-                className="text-[48px] font-medium text-white leading-[1.1] mb-6" 
-                style={{ letterSpacing: '-0.03em' }}
+                className="text-[48px] font-extrabold text-white leading-[1.1] mb-6" 
+                style={{ fontFamily: 'Inter, sans-serif', letterSpacing: '-0.05em' }}
               >
                 Save for real things.<br />
                 Unlock real discounts.
@@ -424,8 +425,8 @@ export default function LandingPage() {
               }}
             >
               <h2 
-                className="text-[48px] font-medium text-[#1A1A1A] leading-[1.1] mb-6" 
-                style={{ letterSpacing: '-0.03em' }}
+                className="text-[48px] font-extrabold text-[#1A1A1A] leading-[1.1] mb-6" 
+                style={{ fontFamily: 'Inter, sans-serif', letterSpacing: '-0.05em' }}
               >
                 Move money or<br />
                 automate it. Your call.
@@ -470,8 +471,8 @@ export default function LandingPage() {
               }}
             >
               <h2 
-                className="text-[48px] font-medium text-white leading-[1.1] mb-6" 
-                style={{ letterSpacing: '-0.03em' }}
+                className="text-[48px] font-extrabold text-white leading-[1.1] mb-6" 
+                style={{ fontFamily: 'Inter, sans-serif', letterSpacing: '-0.05em' }}
               >
                 Watch your savings<br />
                 grow with APY.
@@ -554,7 +555,7 @@ export default function LandingPage() {
                 />
                 {/* Text content outside */}
                 <div>
-                  <h3 className="text-[32px] font-medium text-[#1A1A1A] mb-3" style={{ letterSpacing: '-5%', lineHeight: '110%' }}>
+                  <h3 className="text-[32px] font-extrabold text-[#1A1A1A] mb-3" style={{ fontFamily: 'Inter, sans-serif', letterSpacing: '-0.05em', lineHeight: '110%' }}>
                     Link your bank.<br />
                     Fuel your buckets.
                   </h3>
@@ -578,7 +579,7 @@ export default function LandingPage() {
                 />
                 {/* Text content outside */}
                 <div>
-                  <h3 className="text-[32px] font-medium text-[#1A1A1A] mb-3" style={{ letterSpacing: '-5%', lineHeight: '110%' }}>
+                  <h3 className="text-[32px] font-extrabold text-[#1A1A1A] mb-3" style={{ fontFamily: 'Inter, sans-serif', letterSpacing: '-0.05em', lineHeight: '110%' }}>
                     Get smart updates.<br />
                     Weekly & Monthly.
                   </h3>
@@ -602,7 +603,7 @@ export default function LandingPage() {
                 />
                 {/* Text content outside */}
                 <div>
-                  <h3 className="text-[32px] font-medium text-[#1A1A1A] mb-3" style={{ letterSpacing: '-5%', lineHeight: '110%' }}>
+                  <h3 className="text-[32px] font-extrabold text-[#1A1A1A] mb-3" style={{ fontFamily: 'Inter, sans-serif', letterSpacing: '-0.05em', lineHeight: '110%' }}>
                     Share Zuma.<br />
                     Get rewarded.
                   </h3>

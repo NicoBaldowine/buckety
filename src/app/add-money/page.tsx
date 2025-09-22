@@ -31,6 +31,7 @@ function AddMoneyContent() {
   const searchParams = useSearchParams()
   const { user } = useAuth()
   const [amount, setAmount] = useState("")
+  const [isFocused, setIsFocused] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const [fromAccount, setFromAccount] = useState<Account | null>(null)
   const [toAccount, setToAccount] = useState<Account | null>(null)
@@ -84,6 +85,7 @@ function AddMoneyContent() {
 
   const handleBlur = () => {
     setIsTyping(false)
+    setIsFocused(false)
     if (amount) {
       const cleanValue = amount.replace(/[^\d.]/g, '')
       if (cleanValue && !isNaN(parseFloat(cleanValue))) {
@@ -104,6 +106,7 @@ function AddMoneyContent() {
 
   const handleFocus = () => {
     setIsTyping(true)
+    setIsFocused(true)
     if (amount) {
       const cleanValue = amount.replace(/[^\d.]/g, '')
       setAmount(cleanValue)
@@ -158,26 +161,34 @@ function AddMoneyContent() {
     
     // Determine original navigation source
     if (sourceParam) {
-      // If explicitly provided in URL
-      setOriginalSource(sourceParam)
-    } else if (toBucketId && toBucketId !== 'main-bucket') {
-      // If navigating to a specific bucket, likely came from bucket-details
-      setOriginalSource(`/bucket-details?id=${toBucketId}`)
-    } else {
-      // Check session storage for navigation context
-      const navContext = sessionStorage.getItem('navigation_context')
-      if (navContext === 'fromBucketDetails') {
-        // Try to get the bucket details from search params or default to home
-        const bucketId = toBucketId || sessionStorage.getItem('last_viewed_bucket')
-        if (bucketId) {
-          setOriginalSource(`/bucket-details?id=${bucketId}`)
-        } else {
-          setOriginalSource('/home')
-        }
+      // If explicitly provided in URL, validate it contains proper bucket data
+      if (sourceParam.includes('bucket-details') && sourceParam.includes('id=')) {
+        setOriginalSource(sourceParam)
       } else {
-        // Default to home
         setOriginalSource('/home')
       }
+    } else if (toBucketId && toBucketId !== 'main-bucket') {
+      // Verify the bucket actually exists before setting as source
+      const savedBuckets = HybridStorage.getLocalBuckets(user?.id)
+      const bucketExists = savedBuckets.find((b: { id: string }) => b.id === toBucketId)
+      
+      if (bucketExists) {
+        // Build proper bucket details URL with all required parameters
+        const bucketParams = new URLSearchParams({
+          id: bucketExists.id,
+          title: bucketExists.title,
+          currentAmount: bucketExists.currentAmount.toString(),
+          targetAmount: bucketExists.targetAmount.toString(),
+          backgroundColor: bucketExists.backgroundColor,
+          apy: (bucketExists.apy || 3.8).toString()
+        })
+        setOriginalSource(`/bucket-details?${bucketParams.toString()}`)
+      } else {
+        setOriginalSource('/home')
+      }
+    } else {
+      // Default to home
+      setOriginalSource('/home')
     }
     
     // Handle account selection based on URL params
@@ -258,7 +269,7 @@ function AddMoneyContent() {
     router.push(`${path}?${params.toString()}`)
   }
 
-  const handleConvert = () => {
+  const handleConvert = async () => {
     console.log('🚀 Convert button clicked!')
     console.log('From:', fromAccount?.title, 'To:', toAccount?.title, 'Amount:', amount)
     
@@ -287,55 +298,82 @@ function AddMoneyContent() {
     console.log('✅ Starting transfer...')
     setIsConverting(true)
 
-    const result = HybridStorage.transferMoney(fromAccount.id, toAccount.id, transferAmount, user?.id)
-    
-    if (!result.success) {
-      console.error('Transfer failed:', result.error)
-      // Check if it's an insufficient funds error and set the state
-      if (result.error?.toLowerCase().includes('insufficient')) {
-        setHasInsufficientBalance(true)
-      }
-      setIsConverting(false)
-      return
-    }
-
-    console.log('✅ Transfer successful!')
-
-    // Since localStorage is updated instantly, navigate immediately
-    // Get fresh data after transfer
-    const destinationBucket = toAccount.id === 'main-bucket' 
-      ? {
-          id: 'main-bucket',
-          title: 'Main Bucket',
-          currentAmount: HybridStorage.getLocalMainBucket(user?.id).currentAmount,
-          targetAmount: 1200,
-          backgroundColor: '#E5E7EB',
-          apy: 0
+    try {
+      const result = await HybridStorage.transferMoney(fromAccount.id, toAccount.id, transferAmount, user?.id)
+      
+      if (!result.success) {
+        console.error('Transfer failed:', result.error)
+        // Check if it's an insufficient funds error and set the state
+        if (result.error?.toLowerCase().includes('insufficient')) {
+          setHasInsufficientBalance(true)
         }
-      : HybridStorage.getLocalBuckets(user?.id).find((b: { id: string }) => b.id === toAccount.id)
-    
-    if (destinationBucket) {
-      const params = new URLSearchParams({
-        id: destinationBucket.id || '',
-        title: destinationBucket.title || '',
-        currentAmount: (destinationBucket.currentAmount || 0).toString(),
-        targetAmount: (destinationBucket.targetAmount || 0).toString(),
-        backgroundColor: destinationBucket.backgroundColor || '#ffffff',
-        apy: (destinationBucket.apy || 0).toString(),
-        fromTransfer: 'true',
-        transferAmount: transferAmount.toString(),
-        fromSource: fromAccount.title || 'Main Bucket'
-      })
-      
-      // Set navigation context so back button goes to home
-      if (typeof window !== 'undefined') {
-        sessionStorage.setItem('navigation_context', 'fromTransfer')
+        setIsConverting(false)
+        return
       }
+
+      console.log('✅ Transfer successful!')
       
-      // Navigate immediately since data is already updated in localStorage
-      router.push(`/bucket-details?${params.toString()}`)
-    } else {
-      router.push('/home')
+      // Add a delay to ensure all async operations (DB save, duplicate cleanup) complete
+      await new Promise(resolve => setTimeout(resolve, 1500))
+
+      // Additional cleanup: Remove any potential duplicates that might still exist
+      if (toAccount.id !== 'main-bucket') {
+        const currentActivities = JSON.parse(localStorage.getItem(`activities_${toAccount.id}`) || '[]')
+        const todayDate = new Date().toISOString().split('T')[0]
+        
+        // Remove exact duplicates by title, amount, and date
+        const cleanedActivities = currentActivities.filter((activity: any, index: number) => {
+          return !currentActivities.slice(0, index).some((existing: any) =>
+            existing.title === activity.title &&
+            Math.abs(existing.amount - activity.amount) < 0.01 &&
+            existing.date === activity.date
+          )
+        })
+        
+        if (cleanedActivities.length !== currentActivities.length) {
+          localStorage.setItem(`activities_${toAccount.id}`, JSON.stringify(cleanedActivities))
+          console.log('🧹 Cleaned up duplicate activities before navigation')
+        }
+      }
+
+      // Get fresh data after transfer and cleanup
+      const destinationBucket = toAccount.id === 'main-bucket' 
+        ? {
+            id: 'main-bucket',
+            title: 'Main Bucket',
+            currentAmount: HybridStorage.getLocalMainBucket(user?.id).currentAmount,
+            targetAmount: 1200,
+            backgroundColor: '#E5E7EB',
+            apy: 0
+          }
+        : HybridStorage.getLocalBuckets(user?.id).find((b: { id: string }) => b.id === toAccount.id)
+      
+      if (destinationBucket) {
+        const params = new URLSearchParams({
+          id: destinationBucket.id || '',
+          title: destinationBucket.title || '',
+          currentAmount: (destinationBucket.currentAmount || 0).toString(),
+          targetAmount: (destinationBucket.targetAmount || 0).toString(),
+          backgroundColor: destinationBucket.backgroundColor || '#ffffff',
+          apy: (destinationBucket.apy || 0).toString(),
+          fromTransfer: 'true',
+          transferAmount: transferAmount.toString(),
+          fromSource: fromAccount.title || 'Main Bucket'
+        })
+        
+        // Set navigation context so back button goes to home
+        if (typeof window !== 'undefined') {
+          sessionStorage.setItem('navigation_context', 'fromTransfer')
+        }
+        
+        // Navigate immediately since data is already updated in localStorage
+        router.push(`/bucket-details?${params.toString()}`)
+      } else {
+        router.push('/home')
+      }
+    } catch (error) {
+      console.error('Error during transfer:', error)
+      setIsConverting(false)
     }
   }
 
@@ -441,6 +479,24 @@ function AddMoneyContent() {
           sessionStorage.setItem('navigation_context', 'fromAutoDeposit')
         }
         
+        // Small delay and cleanup before navigation to ensure no duplicates
+        await new Promise(resolve => setTimeout(resolve, 500))
+        
+        // Additional cleanup for auto-deposit scenarios
+        const currentActivities = JSON.parse(localStorage.getItem(`activities_${bucket.id}`) || '[]')
+        const cleanedActivities = currentActivities.filter((activity: any, index: number) => {
+          return !currentActivities.slice(0, index).some((existing: any) =>
+            existing.title === activity.title &&
+            Math.abs(existing.amount - activity.amount) < 0.01 &&
+            existing.date === activity.date
+          )
+        })
+        
+        if (cleanedActivities.length !== currentActivities.length) {
+          localStorage.setItem(`activities_${bucket.id}`, JSON.stringify(cleanedActivities))
+          console.log('🧹 Cleaned up duplicate activities before auto-deposit navigation')
+        }
+        
         router.push(`/bucket-details?${params.toString()}`)
       } else {
         console.error('Bucket not found in localStorage')
@@ -541,7 +597,11 @@ function AddMoneyContent() {
               className={`text-[80px] font-semibold focus:outline-none transition-colors cursor-text bg-transparent border-none text-center w-full ${
                 hasInsufficientBalance 
                   ? 'text-red-500' 
-                  : 'text-foreground/50 focus:text-foreground'
+                  : amount && !isFocused
+                    ? 'text-foreground' // White when filled and not focused
+                    : isFocused
+                      ? 'text-foreground/70' // Lighter gray when focused/typing
+                      : 'text-foreground/30' // Dark gray when empty and not focused
               }`}
               style={{ letterSpacing: '-0.03em' }}
             />

@@ -6,11 +6,53 @@ import { AvatarDropdown } from "@/components/ui/avatar-dropdown"
 import { ProtectedRoute } from "@/components/auth/protected-route"
 import { HeaderSkeleton, BalanceSkeleton, MainBucketSkeleton, BucketCardSkeleton } from "@/components/ui/skeleton-loader"
 import { TabBar } from "@/components/ui/tab-bar"
-import { Info, ChevronRight } from "lucide-react"
+import { ChevronRight, Link2 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useState, useEffect, useRef } from "react"
 import { autoDepositService, bucketService, mainBucketService } from "@/lib/supabase"
 import { useAuth } from "@/contexts/auth-context"
+// import { syncMainBucketBalance, createMissingMainBucketActivities } from "@/lib/sync-main-bucket"
+
+// Bank Account Button Component
+function BankAccountButton() {
+  const router = useRouter()
+  const { user } = useAuth()
+  
+  // Check if bank is connected
+  const isBankConnected = user?.id ? localStorage.getItem(`bank_connected_${user.id}`) === 'true' : false
+  
+  if (isBankConnected) {
+    return (
+      <button 
+        onClick={() => router.push('/earnings')}
+        className="text-[16px] font-semibold hover:opacity-80 transition-opacity cursor-pointer flex items-center gap-1.5"
+        style={{ letterSpacing: '-0.03em' }}
+      >
+        <Link2 className="h-4 w-4 text-foreground/40" />
+        <span className="text-foreground/40">Chase Savings **9070</span>
+        <ChevronRight className="h-4 w-4 text-foreground/40" />
+      </button>
+    )
+  }
+
+  return (
+    <button 
+      onClick={() => {
+        // Simulate bank connection (in real app, would integrate with Plaid)
+        if (user?.id) {
+          localStorage.setItem(`bank_connected_${user.id}`, 'true')
+          window.location.reload() // Refresh to show connected state
+        }
+      }}
+      className="text-[16px] font-semibold hover:opacity-80 transition-opacity cursor-pointer flex items-center gap-1.5"
+      style={{ letterSpacing: '-0.03em' }}
+    >
+      <Link2 className="h-4 w-4 text-foreground/60" />
+      <span className="text-foreground/60">Connect your account</span>
+      <ChevronRight className="h-4 w-4 text-foreground/60" />
+    </button>
+  )
+}
 
 interface Bucket {
   id: string
@@ -20,59 +62,6 @@ interface Bucket {
   backgroundColor: string
   apy: number
 }
-
-/*
-const defaultBuckets = [
-  {
-    id: "vacation",
-    title: "Vacation Fund 🏖️",
-    currentAmount: 1250,
-    targetAmount: 3000,
-    apy: 3.8,
-    backgroundColor: "#B6F3AD"
-  },
-  {
-    id: "emergency",
-    title: "Emergency Fund 🚨", 
-    currentAmount: 890,
-    targetAmount: 2000,
-    apy: 4.2,
-    backgroundColor: "#BFB0FF"
-  },
-  {
-    id: "car",
-    title: "New Car 🚗",
-    currentAmount: 2300,
-    targetAmount: 8000,
-    apy: 3.5,
-    backgroundColor: "#FDB86A"
-  },
-  {
-    id: "drumset",
-    title: "Electronic Drumset 🥁",
-    currentAmount: 675,
-    targetAmount: 1500,
-    apy: 4.0,
-    backgroundColor: "#FF97D0"
-  },
-  {
-    id: "gaming",
-    title: "Gaming Setup 🎮",
-    currentAmount: 420,
-    targetAmount: 2500,
-    apy: 3.9,
-    backgroundColor: "#A3D5FF"
-  },
-  {
-    id: "coffee",
-    title: "Coffee Shop Business ☕",
-    currentAmount: 1800,
-    targetAmount: 5000,
-    apy: 4.1,
-    backgroundColor: "#FFB366"
-  }
-]
-*/
 
 export default function HomePage() {
   return (
@@ -91,7 +80,33 @@ function HomePageContent() {
   const [buckets, setBuckets] = useState<Bucket[]>([])
   const [totalBalance, setTotalBalance] = useState(0)
   const [mainBucketAmount, setMainBucketAmount] = useState(1200.00)
-  const [autoDepositBuckets, setAutoDepositBuckets] = useState<Set<string>>(new Set())
+  const [autoDepositBuckets, setAutoDepositBuckets] = useState<Set<string>>(() => {
+    // Initialize instantly from localStorage for immediate UI feedback
+    if (typeof window === 'undefined') return new Set()
+    
+    const initialAutoDepositBuckets = new Set<string>()
+    try {
+      // Get all auto deposit keys for current user
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i)
+        if (key?.startsWith('auto_deposits_') && !key.includes('undefined')) {
+          const bucketId = key.replace('auto_deposits_', '')
+          const localAutoDeposits = localStorage.getItem(key)
+          if (localAutoDeposits) {
+            try {
+              const deposits = JSON.parse(localAutoDeposits)
+              if (deposits && deposits.length > 0) {
+                initialAutoDepositBuckets.add(bucketId)
+              }
+            } catch {}
+          }
+        }
+      }
+    } catch (error) {
+      console.warn('Error loading initial auto deposits from localStorage:', error)
+    }
+    return initialAutoDepositBuckets
+  })
   const [isLoading, setIsLoading] = useState(true)
   // const [hasLoadedFromCache, setHasLoadedFromCache] = useState(false) // Unused variables commented out
 
@@ -112,6 +127,30 @@ function HomePageContent() {
     if (!effectiveUser) {
       setIsLoading(false)
       return
+    }
+    
+    // Clean up ALL Main Bucket keys that might be contaminated
+    if (typeof window !== 'undefined') {
+      // Remove ALL Main Bucket related keys except the current user's
+      const keysToCheck = Object.keys(localStorage)
+      keysToCheck.forEach(key => {
+        // Remove global Main Bucket keys
+        if (key === 'main_bucket_transfers' || key === 'activities_main-bucket') {
+          console.log(`🧹 Removing contaminated global key: ${key}`)
+          localStorage.removeItem(key)
+        }
+        // Remove Main Bucket keys from OTHER users
+        if (key.startsWith('main_bucket_transfers_') && !key.endsWith(effectiveUser.id)) {
+          console.log(`🧹 Removing other user's Main Bucket key: ${key}`)
+          localStorage.removeItem(key)
+        }
+        if (key.startsWith('activities_main-bucket_') && !key.endsWith(effectiveUser.id)) {
+          console.log(`🧹 Removing other user's activities key: ${key}`)
+          localStorage.removeItem(key)
+        }
+      })
+      
+      // Don't clear user's Main Bucket data - it's user-specific now
     }
     
     // Load cached data immediately for fast initial render
@@ -141,35 +180,45 @@ function HomePageContent() {
     const initializeData = async () => {
       
       try {
-        // Execute any pending auto-deposits first
-        if (user?.id) {
-          try {
-            const result = await autoDepositService.executeAutoDeposits(user.id)
-            if (result.executed > 0) {
-              console.log(`✅ Executed ${result.executed} auto-deposits`)
-            }
-          } catch (error) {
-            console.warn('Auto-deposit execution not available:', error)
-          }
-        }
+        // Auto-deposits are now handled by server-side cron jobs
+        // No need to execute them in the client to avoid conflicts
         
         // Load user's buckets directly from database
         const userBuckets = await bucketService.getBuckets(user?.id || '')
         
+        // Transform database buckets to local format (even if empty)
+        const transformedBuckets = userBuckets.map(bucket => ({
+          id: bucket.id,
+          title: bucket.title,
+          currentAmount: bucket.current_amount,
+          targetAmount: bucket.target_amount,
+          backgroundColor: bucket.background_color,
+          apy: bucket.apy
+        }))
+        
         if (userBuckets.length > 0) {
-          // Transform database buckets to local format
-          const transformedBuckets = userBuckets.map(bucket => ({
-            id: bucket.id,
-            title: bucket.title,
-            currentAmount: bucket.current_amount,
-            targetAmount: bucket.target_amount,
-            backgroundColor: bucket.background_color,
-            apy: bucket.apy
-          }))
           
           setBuckets(transformedBuckets)
           
-          // Check for auto deposits for each bucket (database first for accuracy)
+          // First, load auto deposits instantly from localStorage (for immediate UI feedback)
+          const instantAutoDepositBuckets = new Set<string>()
+          transformedBuckets.forEach(bucket => {
+            const autoDepositsKey = `auto_deposits_${bucket.id}`
+            const localAutoDeposits = localStorage.getItem(autoDepositsKey)
+            if (localAutoDeposits) {
+              try {
+                const deposits = JSON.parse(localAutoDeposits)
+                if (deposits && deposits.length > 0) {
+                  instantAutoDepositBuckets.add(bucket.id)
+                }
+              } catch (error) {
+                console.warn('Error parsing local auto deposits:', error)
+              }
+            }
+          })
+          setAutoDepositBuckets(instantAutoDepositBuckets)
+          
+          // Then, check database in background for accuracy and sync
           const autoDepositChecks = await Promise.all(
             userBuckets.map(async (bucket) => {
               try {
@@ -211,14 +260,47 @@ function HomePageContent() {
         // Load user's main bucket
         const mainBucket = await mainBucketService.getMainBucket(user?.id || '')
         if (mainBucket) {
-          setMainBucketAmount(mainBucket.current_amount)
-          localStorage.setItem(`mainBucket_${user?.id}`, JSON.stringify({ currentAmount: mainBucket.current_amount }))
+          // Calculate what the Main Bucket SHOULD be
+          const bucketsSum = transformedBuckets.reduce((sum, bucket) => sum + bucket.currentAmount, 0)
+          const correctMainBucketAmount = 1200 - bucketsSum
+          
+          // Use the correct amount
+          setMainBucketAmount(correctMainBucketAmount)
+          localStorage.setItem(`mainBucket_${user?.id}`, JSON.stringify({ currentAmount: correctMainBucketAmount }))
+          
+          // Update database if needed
+          if (Math.abs(mainBucket.current_amount - correctMainBucketAmount) > 0.01) {
+            await mainBucketService.updateMainBucket(user?.id || '', correctMainBucketAmount)
+          }
         } else {
           // Create initial main bucket for new user
-          await mainBucketService.updateMainBucket(user?.id || '', 1200.00)
-          setMainBucketAmount(1200.00)
-          localStorage.setItem(`mainBucket_${user?.id}`, JSON.stringify({ currentAmount: 1200.00 }))
+          const bucketsSum = transformedBuckets.reduce((sum, bucket) => sum + bucket.currentAmount, 0)
+          const initialMainBucketAmount = 1200 - bucketsSum
+          
+          await mainBucketService.updateMainBucket(user?.id || '', initialMainBucketAmount)
+          setMainBucketAmount(initialMainBucketAmount)
+          localStorage.setItem(`mainBucket_${user?.id}`, JSON.stringify({ currentAmount: initialMainBucketAmount }))
         }
+        
+        // DISABLED: Sync Main Bucket balance - was causing reset to 1200
+        // The balance is now properly managed through direct updates
+        /*
+        if (user?.id) {
+          syncMainBucketBalance(user.id).then(correctedBalance => {
+            if (correctedBalance !== undefined) {
+              setMainBucketAmount(correctedBalance)
+              localStorage.setItem(`mainBucket_${user.id}`, JSON.stringify({ currentAmount: correctedBalance }))
+            }
+          }).catch(error => {
+            console.error('Error syncing Main Bucket balance:', error)
+          })
+          
+          // Also check for missing Main Bucket activities
+          createMissingMainBucketActivities(user.id).catch(error => {
+            console.error('Error creating missing activities:', error)
+          })
+        }
+        */
         
       } catch (error) {
         console.error('Error loading user data:', error)
@@ -264,11 +346,57 @@ function HomePageContent() {
 
   // Total balance should always be $1200 (initial amount for all users)
   // Money just moves between buckets, total never changes
+  const TOTAL_BALANCE = 1200
   useEffect(() => {
-    setTotalBalance(1200)
+    setTotalBalance(TOTAL_BALANCE)
   }, [])
   
-  // Check and execute auto-deposits periodically (once when app opens)
+  // Recalculate Main Bucket based on Total Balance minus sum of buckets
+  useEffect(() => {
+    if (user) {
+      // Calculate sum of all bucket amounts
+      const bucketsSum = buckets.reduce((sum, bucket) => sum + bucket.currentAmount, 0)
+      
+      // Main Bucket = Total Balance - Sum of all buckets
+      const correctMainBucketAmount = TOTAL_BALANCE - bucketsSum
+      
+      // Update Main Bucket if different
+      if (Math.abs(mainBucketAmount - correctMainBucketAmount) > 0.01) {
+        console.log('📊 Recalculating Main Bucket:', {
+          totalBalance: TOTAL_BALANCE,
+          bucketsSum,
+          correctMainBucketAmount,
+          currentMainBucketAmount: mainBucketAmount
+        })
+        
+        setMainBucketAmount(correctMainBucketAmount)
+        
+        // Update localStorage
+        localStorage.setItem(`mainBucket_${user.id}`, JSON.stringify({ 
+          currentAmount: correctMainBucketAmount 
+        }))
+        
+        // Update database
+        mainBucketService.updateMainBucket(user.id, correctMainBucketAmount).catch(error => {
+          console.error('Error updating main bucket in database:', error)
+        })
+      }
+    }
+  }, [buckets, user])
+  
+  // Auto-deposits are now handled by server-side cron jobs
+  // This useEffect is disabled to avoid conflicts with server execution
+  // useEffect(() => {
+  //   if (!user?.id) return
+  //   
+  //   const checkAutoDeposits = async () => {
+  //     console.log('Auto-deposits are handled server-side via cron jobs')
+  //   }
+  //   checkAutoDeposits()
+  // }, [user?.id])
+  
+  /*
+  // DISABLED: Check and execute auto-deposits periodically (once when app opens)
   useEffect(() => {
     if (!user?.id) return
     
@@ -322,6 +450,7 @@ function HomePageContent() {
     document.addEventListener('visibilitychange', handleVisibilityChange)
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
   }, [user])
+  */
 
   // Refresh buckets when returning from other pages (user-specific)
   useEffect(() => {
@@ -335,6 +464,17 @@ function HomePageContent() {
               setBuckets(JSON.parse(cachedBuckets))
             } catch {
               console.warn('Error parsing cached buckets during refresh')
+            }
+          }
+          
+          // Also refresh Main Bucket from localStorage for immediate update
+          const cachedMainBucket = localStorage.getItem(`mainBucket_${user.id}`)
+          if (cachedMainBucket) {
+            try {
+              const mainBucketData = JSON.parse(cachedMainBucket)
+              setMainBucketAmount(mainBucketData.currentAmount)
+            } catch {
+              console.warn('Error parsing cached main bucket during refresh')
             }
           }
           
@@ -353,7 +493,25 @@ function HomePageContent() {
             
             setBuckets(transformedBuckets)
             
-            // Also refresh auto deposit status (database first for accuracy)
+            // First, load auto deposits instantly from localStorage (for immediate UI feedback)
+            const instantAutoDepositBuckets = new Set<string>()
+            transformedBuckets.forEach(bucket => {
+              const autoDepositsKey = `auto_deposits_${bucket.id}`
+              const localAutoDeposits = localStorage.getItem(autoDepositsKey)
+              if (localAutoDeposits) {
+                try {
+                  const deposits = JSON.parse(localAutoDeposits)
+                  if (deposits && deposits.length > 0) {
+                    instantAutoDepositBuckets.add(bucket.id)
+                  }
+                } catch (error) {
+                  console.warn('Error parsing local auto deposits during refresh:', error)
+                }
+              }
+            })
+            setAutoDepositBuckets(instantAutoDepositBuckets)
+            
+            // Also refresh auto deposit status from database for accuracy
             const autoDepositChecks = await Promise.all(
               userBuckets.map(async (bucket) => {
                 try {
@@ -406,10 +564,48 @@ function HomePageContent() {
     }
     window.addEventListener('focus', handleWindowFocus)
     
-    // Also check auto deposits periodically to catch cancellations
-    // Check database every 5 seconds for accurate state
-    const interval = setInterval(async () => {
+    // Listen for localStorage changes (from other tabs or components)
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === `mainBucket_${user?.id}` && e.newValue) {
+        try {
+          const mainBucketData = JSON.parse(e.newValue)
+          setMainBucketAmount(mainBucketData.currentAmount)
+        } catch {
+          console.warn('Error parsing main bucket from storage event')
+        }
+      }
+    }
+    window.addEventListener('storage', handleStorageChange)
+    
+    // Check auto deposits periodically 
+    // For development/testing, execute auto deposits every 30 seconds from client
+    const checkAndExecuteAutoDeposits = async () => {
       if (buckets.length > 0 && user) {
+        // Execute auto deposits (temporary for testing until server cron is deployed)
+        try {
+          console.log('🔄 Checking for auto deposits to execute...')
+          const result = await autoDepositService.executeAutoDeposits(user.id)
+          if (result.executed > 0) {
+            console.log(`✅ Executed ${result.executed} auto-deposits`)
+            // Refresh buckets to show updated amounts
+            const userBuckets = await bucketService.getBuckets(user.id)
+            if (userBuckets.length > 0) {
+              const transformedBuckets = userBuckets.map(bucket => ({
+                id: bucket.id,
+                title: bucket.title,
+                currentAmount: bucket.current_amount,
+                targetAmount: bucket.target_amount,
+                backgroundColor: bucket.background_color,
+                apy: bucket.apy
+              }))
+              setBuckets(transformedBuckets)
+              localStorage.setItem(`buckets_${user.id}`, JSON.stringify(transformedBuckets))
+            }
+          }
+        } catch (error) {
+          console.warn('Auto-deposit execution error:', error)
+        }
+        
         const autoDepositChecks = await Promise.all(
           buckets.map(async (bucket) => {
             try {
@@ -441,11 +637,18 @@ function HomePageContent() {
         )
         setAutoDepositBuckets(bucketsWithAutoDeposits)
       }
-    }, 5000) // Check every 5 seconds instead of every second
+    }
+    
+    // Execute immediately on mount
+    checkAndExecuteAutoDeposits()
+    
+    // Then check every 30 seconds
+    const interval = setInterval(checkAndExecuteAutoDeposits, 30000) // Check every 30 seconds for testing
     
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange)
       window.removeEventListener('focus', handleWindowFocus)
+      window.removeEventListener('storage', handleStorageChange)
       clearInterval(interval)
     }
   }, [user, buckets, autoDepositBuckets])
@@ -567,32 +770,14 @@ function HomePageContent() {
               >
                 Total balance
               </p>
-              <div className="relative group">
-                <Info className="h-4 w-4 text-foreground/30 hover:text-foreground/50 transition-colors cursor-help" />
-                <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 bg-black text-white text-sm px-3 py-2 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-10">
-                  <div className="text-center">
-                    <div>Sum of all buckets earning</div>
-                    <div className="font-semibold">6% APY interest</div>
-                  </div>
-                  <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-black"></div>
-                </div>
-              </div>
             </div>
             <p 
-              className="text-[32px] font-semibold text-foreground"
-              style={{ letterSpacing: '-0.03em', marginBottom: '-6px' }}
+              className="text-[32px] font-extrabold text-foreground"
+              style={{ letterSpacing: '-0.04em', marginBottom: '-6px' }}
             >
               ${totalBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </p>
-            <button 
-              onClick={() => router.push('/earnings')}
-              className="text-[16px] font-semibold hover:opacity-80 transition-opacity cursor-pointer flex items-center gap-1"
-              style={{ letterSpacing: '-0.03em' }}
-            >
-              <span style={{ color: '#19B802' }}>+6%</span>
-              <span className="text-foreground ml-1">(${(totalBalance * 0.06).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})</span>
-              <ChevronRight className="h-4 w-4 text-foreground/50" />
-            </button>
+            <BankAccountButton />
           </div>
         </div>
 
@@ -614,37 +799,19 @@ function HomePageContent() {
             router.push(`/bucket-details?${params.toString()}`)
           }}
         >
-          <div className="flex items-center justify-between">
-            <div className="flex-1">
-              {/* Header with title */}
-              <div className="mb-1">
-                <h3 className="text-[20px] font-semibold tracking-tight text-foreground">
-                  Main Bucket 🏦
-                </h3>
-              </div>
-              
-              {/* Amount section - single amount only */}
-              <div>
-                <div className="flex items-baseline gap-1">
-                  <span className="text-[24px] font-semibold tracking-tight text-foreground">
-                    ${mainBucketAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </span>
-                </div>
-              </div>
-            </div>
-            
-            {/* Add balance button */}
-            <div className="ml-4">
-              <Button 
-                variant="secondary"
-                onClick={(e) => {
-                  e.stopPropagation() // Prevent card click
-                  // Navigate to add funds page
-                  router.push('/add-money?source=/home')
-                }}
-              >
-                Add funds
-              </Button>
+          {/* Header with title - matching bucket card styling but theme-aware text */}
+          <div className="mb-0">
+            <h3 className="text-[24px] font-extrabold text-foreground" style={{ letterSpacing: '-0.04em' }}>
+              Main Bucket 🏦
+            </h3>
+          </div>
+          
+          {/* Amount section - matching bucket card styling but theme-aware text */}
+          <div>
+            <div className="flex items-baseline gap-1">
+              <span className="text-[20px] font-semibold tracking-tight text-foreground">
+                ${mainBucketAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </span>
             </div>
           </div>
         </div>

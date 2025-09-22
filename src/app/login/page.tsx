@@ -7,17 +7,48 @@ import { AppLoadingScreen } from "@/components/ui/loading-spinner"
 import { useRouter } from "next/navigation"
 import { useState, useEffect } from "react"
 import { authService } from "@/lib/auth"
+import { HybridStorage } from "@/lib/hybrid-storage"
 import Image from "next/image"
 import { Eye, EyeOff } from "lucide-react"
+import Link from "next/link"
 
 export default function LoginPage() {
   const router = useRouter()
+  const [currentTheme, setCurrentTheme] = useState<'light' | 'dark'>('light')
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState("")
   const [checkingAuth, setCheckingAuth] = useState(true)
   const [showPassword, setShowPassword] = useState(false)
+  
+  // Detect current theme
+  useEffect(() => {
+    const detectTheme = () => {
+      const savedTheme = localStorage.getItem("theme") as "light" | "dark" | null
+      if (savedTheme) {
+        setCurrentTheme(savedTheme)
+      } else {
+        // Use system theme
+        const systemTheme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"
+        setCurrentTheme(systemTheme)
+      }
+    }
+    
+    detectTheme()
+    
+    // Listen for system theme changes
+    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)")
+    const handleChange = () => {
+      const savedTheme = localStorage.getItem("theme")
+      if (!savedTheme) {
+        setCurrentTheme(mediaQuery.matches ? "dark" : "light")
+      }
+    }
+    
+    mediaQuery.addEventListener('change', handleChange)
+    return () => mediaQuery.removeEventListener('change', handleChange)
+  }, [])
   
   // Check if user is already logged in and listen for auth changes
   useEffect(() => {
@@ -61,27 +92,65 @@ export default function LoginPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!email || !password) return
+    console.log('🚀 Form submitted!', { email, password: '***', emailLength: email.length, passwordLength: password.length })
+    
+    if (!email || !password) {
+      console.log('❌ Missing email or password')
+      return
+    }
 
+    console.log('🔄 Setting isSubmitting to true')
     setIsSubmitting(true)
     setError("")
 
     try {
-      console.log('Attempting to sign in with email:', email)
+      console.log('🔐 About to call authService.signIn with:', email)
       const result = await authService.signIn(email, password)
-      console.log('Sign in result:', result)
+      console.log('🔐 Got result from authService:', result)
       
       if (result.success && result.session) {
-        console.log('Sign in successful, redirecting...')
-        // Navigate to home
-        window.location.href = '/home'
+        console.log('✅ Sign in successful, session:', result.session)
+        
+        // Check if user needs onboarding
+        const userId = result.session.user?.id
+        console.log('👤 User ID:', userId)
+        
+        if (userId) {
+          // Check if user has buckets (more reliable than onboarding flag)
+          const userBuckets = HybridStorage.getLocalBuckets(userId)
+          const hasCompletedOnboarding = localStorage.getItem(`onboarding_completed_${userId}`)
+          const hasBuckets = userBuckets && userBuckets.length > 0
+          
+          console.log('🎯 Has completed onboarding:', hasCompletedOnboarding)
+          console.log('🪣 Has buckets:', hasBuckets, 'Count:', userBuckets?.length || 0)
+          
+          // If user has buckets OR has completed onboarding, go to home
+          if (hasBuckets || hasCompletedOnboarding === 'true') {
+            console.log('📍 Existing user (has buckets or completed onboarding) - redirecting to home...')
+            setTimeout(() => {
+              router.push('/home')
+            }, 100)
+          } else {
+            console.log('📍 New user (no buckets, no completed onboarding) - redirecting to onboarding...')
+            setTimeout(() => {
+              router.push('/onboarding')
+            }, 100)
+          }
+        } else {
+          console.log('📍 No user ID - redirecting to home...')
+          setTimeout(() => {
+            router.push('/home')
+          }, 100)
+        }
+        
+        // Don't reset submitting state here - let navigation happen
       } else {
-        console.error('Sign in failed:', result.error)
+        console.error('❌ Sign in failed:', result.error)
         setError(result.error || "Failed to sign in")
         setIsSubmitting(false)
       }
     } catch (error) {
-      console.error('Unexpected error during sign in:', error)
+      console.error('💥 Unexpected error during sign in:', error)
       setError("An unexpected error occurred. Please try again.")
       setIsSubmitting(false)
     }
@@ -116,26 +185,38 @@ export default function LoginPage() {
     return <AppLoadingScreen />
   }
 
+  // Don't show loading overlay if there's an error - show the form with error instead
+  if (isSubmitting && !error) {
+    return (
+      <div className="min-h-screen bg-background">
+        <div className="max-w-[520px] mx-auto px-12 py-6 max-sm:px-4 max-sm:py-3 min-h-screen flex items-center">
+          <div className="w-full">
+            {/* Loading state - no logo */}
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-foreground mx-auto mb-4"></div>
+              <p className="text-foreground/60 text-[16px]">Signing you in...</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
-    <div className="min-h-screen bg-background transition-all duration-500 ease-out">
+    <div className="min-h-screen bg-background">
       <div className="max-w-[520px] mx-auto px-12 py-6 max-sm:px-4 max-sm:py-3 min-h-screen flex items-center">
         <div className="w-full">
           {/* Logo */}
           <div className="flex justify-center mb-10">
-            <div className="relative w-48 h-16">
+            <Link href="/" className="relative w-48 h-16 cursor-pointer hover:opacity-80 transition-opacity">
               <Image 
-                src="/zuma-light.svg" 
+                src={currentTheme === 'light' ? "/zuma-light.svg" : "/zuma-dark.svg"}
                 alt="Zuma Logo" 
                 fill
-                className="object-contain dark:hidden"
+                className="object-contain"
+                priority
               />
-              <Image 
-                src="/zuma-dark.svg" 
-                alt="Zuma Logo" 
-                fill
-                className="object-contain hidden dark:block"
-              />
-            </div>
+            </Link>
           </div>
           
           {/* Header */}
@@ -144,8 +225,8 @@ export default function LoginPage() {
             style={{ animation: 'fadeInUp 0.5s ease-out 0.1s both' }}
           >
             <h1 
-              className="text-[32px] font-semibold text-foreground"
-              style={{ letterSpacing: '-0.03em' }}
+              className="text-[32px] font-extrabold text-foreground"
+              style={{ letterSpacing: '-0.05em' }}
             >
               Welcome back
             </h1>
@@ -232,10 +313,7 @@ export default function LoginPage() {
             <div className="text-right mt-2">
               <button 
                 type="button"
-                onClick={() => {
-                  // TODO: Implement forgot password
-                  alert("Forgot password functionality coming soon!")
-                }}
+                onClick={() => router.push('/forgot-password')}
                 className="text-[14px] text-foreground/60 hover:text-foreground transition-colors cursor-pointer"
               >
                 Forgot password?

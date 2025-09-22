@@ -17,6 +17,7 @@ function EditBucketContent() {
   const [bucketName, setBucketName] = useState("")
   const [targetAmount, setTargetAmount] = useState("")
   const [selectedColor, setSelectedColor] = useState("#B6F3AD")
+  const [isSaving, setIsSaving] = useState(false)
 
   // Get bucket data from URL parameters and populate form
   useEffect(() => {
@@ -95,10 +96,15 @@ function EditBucketContent() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
+    if (isSaving) return // Prevent double submission
+    
+    setIsSaving(true)
+    
     const bucketId = searchParams.get('id')
     if (!bucketId) {
       console.error('❌ No bucket ID provided')
       alert('No bucket ID provided.')
+      setIsSaving(false)
       return
     }
     
@@ -109,6 +115,7 @@ function EditBucketContent() {
     if (!effectiveUser?.id) {
       console.error('❌ User not authenticated')
       alert('Please log in to edit bucket.')
+      setIsSaving(false)
       return
     }
     
@@ -116,6 +123,7 @@ function EditBucketContent() {
     if (!parsedAmount || parsedAmount <= 0) {
       console.error('❌ Invalid target amount:', parsedAmount)
       alert('Please enter a valid target amount.')
+      setIsSaving(false)
       return
     }
     
@@ -143,6 +151,7 @@ function EditBucketContent() {
         } else {
           console.error('❌ Bucket not found in localStorage')
           alert('Bucket not found.')
+          setIsSaving(false)
         }
       } else {
         // Database first approach - update in Supabase first, then localStorage
@@ -185,11 +194,13 @@ function EditBucketContent() {
         } else {
           console.error('❌ Failed to update bucket in database')
           alert('Failed to update bucket in database. Please check your connection.')
+          setIsSaving(false)
         }
       }
     } catch (error) {
       console.error('❌ Error updating bucket:', error)
       alert('An error occurred while updating the bucket. Please try again.')
+      setIsSaving(false)
     }
   }
 
@@ -214,8 +225,8 @@ function EditBucketContent() {
           style={{ animation: 'fadeInUp 0.5s ease-out 0.2s both' }}
         >
           <h1 
-            className="text-[32px] font-semibold text-foreground"
-            style={{ letterSpacing: '-0.03em' }}
+            className="text-[32px] font-extrabold text-foreground"
+            style={{ letterSpacing: '-0.05em' }}
           >
             Edit bucket
           </h1>
@@ -289,9 +300,9 @@ function EditBucketContent() {
             <Button 
               type="submit" 
               variant="primary" 
-              disabled={!bucketName || !targetAmount}
+              disabled={!bucketName || !targetAmount || isSaving}
             >
-              Save bucket
+              {isSaving ? 'Saving...' : 'Save bucket'}
             </Button>
           </div>
         </form>
@@ -305,11 +316,11 @@ function EditBucketContent() {
         <Button 
           type="submit" 
           variant="primary" 
-          disabled={!bucketName || !targetAmount}
+          disabled={!bucketName || !targetAmount || isSaving}
           onClick={handleSubmit}
           className="w-full"
         >
-          Save bucket
+          {isSaving ? 'Saving...' : 'Save bucket'}
         </Button>
       </div>
     </div>

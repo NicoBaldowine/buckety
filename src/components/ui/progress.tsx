@@ -17,7 +17,7 @@ const Progress = React.forwardRef<HTMLDivElement, ProgressProps>(
     return (
       <div
         ref={ref}
-        className={cn("relative h-8 w-full", className)}
+        className={cn("relative h-[40px] w-full", className)}
         style={{ position: 'relative', zIndex: 1 }}
         {...props}
       >
@@ -45,7 +45,8 @@ const Progress = React.forwardRef<HTMLDivElement, ProgressProps>(
                 x="1"
                 y="1"
                 width={`calc(${percentage}% - 2px)`}
-                height="30"
+                height="38"
+                rx="8"
               />
             </clipPath>
           </defs>
@@ -55,7 +56,8 @@ const Progress = React.forwardRef<HTMLDivElement, ProgressProps>(
             x="1"
             y="1"
             width="calc(100% - 2px)"
-            height="30"
+            height="38"
+            rx="8"
             fill="#000000"
             fillOpacity="0.1"
           />
@@ -66,7 +68,8 @@ const Progress = React.forwardRef<HTMLDivElement, ProgressProps>(
               x="1"
               y="1"
               width="100%"
-              height="30"
+              height="38"
+              rx="8"
               fill={`url(#diagonal-stripes-${uniqueId})`}
             />
           </g>
@@ -77,7 +80,7 @@ const Progress = React.forwardRef<HTMLDivElement, ProgressProps>(
               x1={`${percentage}%`}
               y1="1"
               x2={`${percentage}%`}
-              y2="31"
+              y2="39"
               stroke="#000000"
               strokeWidth="1"
             />
@@ -88,7 +91,8 @@ const Progress = React.forwardRef<HTMLDivElement, ProgressProps>(
             x="1"
             y="1"
             width="calc(100% - 2px)"
-            height="30"
+            height="38"
+            rx="8"
             fill="none"
             stroke="#000000"
             strokeWidth="1"

@@ -71,8 +71,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setUser(currentUser)
         }
       } catch (error) {
+        // Handle network errors
+        if (error instanceof Error && (error.message.includes('Failed to fetch') || error.message.includes('NetworkError'))) {
+          console.warn('⚠️ Network error while fetching auth session - will retry on next navigation')
+          // Don't clear session on network errors - they might be temporary
+          // Keep existing session if available
+          const existingSession = session
+          if (existingSession) {
+            setSession(existingSession)
+            setUser(user)
+          }
+        }
         // Handle refresh token errors specifically - silently
-        if (error instanceof Error && error.message.includes('Refresh Token Not Found')) {
+        else if (error instanceof Error && error.message.includes('Refresh Token Not Found')) {
           console.log('🧹 Clearing invalid session due to refresh token error')
           // Clear all Supabase auth tokens
           if (typeof window !== 'undefined') {
@@ -82,10 +93,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               }
             })
           }
+          setUser(null)
+          setSession(null)
         }
-        
-        setUser(null)
-        setSession(null)
+        else {
+          // For other errors, clear the session
+          setUser(null)
+          setSession(null)
+        }
       } finally {
         clearTimeout(emergencyTimeout)
         setLoading(false)

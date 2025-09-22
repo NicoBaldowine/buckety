@@ -24,6 +24,8 @@ function CreateBucketContent() {
   const [bucketName, setBucketName] = useState("")
   const [targetAmount, setTargetAmount] = useState("")
   const [selectedColor, setSelectedColor] = useState("#B6F3AD")
+  const [isCreating, setIsCreating] = useState(false)
+  const [amountError, setAmountError] = useState("")
 
   const formatAmount = (value: string) => {
     // Remove non-numeric characters except decimal point
@@ -43,6 +45,11 @@ function CreateBucketContent() {
     // Allow typing digits, decimal point, and commas
     const cleanValue = value.replace(/[^\d.]/g, '')
     setTargetAmount(cleanValue)
+    
+    // Clear error when user starts typing
+    if (amountError) {
+      setAmountError("")
+    }
   }
 
   const handleAmountBlur = () => {
@@ -91,6 +98,8 @@ function CreateBucketContent() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
+    if (isCreating) return // Prevent double submission
+    
     console.log('🚀 Starting bucket creation...', {
       bucketName,
       targetAmount,
@@ -99,6 +108,8 @@ function CreateBucketContent() {
       parsedAmount: parseFloat(targetAmount.replace(/,/g, ''))
     })
     
+    setIsCreating(true)
+    
     // Handle demo mode (only on client side)
     const isDemoMode = typeof window !== 'undefined' ? localStorage.getItem('demo_mode') === 'true' : false
     const effectiveUser = user || (isDemoMode && typeof window !== 'undefined' ? JSON.parse(localStorage.getItem('demo_user') || '{}') : null)
@@ -106,6 +117,7 @@ function CreateBucketContent() {
     if (!effectiveUser?.id) {
       console.error('❌ User not authenticated')
       alert('Please log in to create a bucket.')
+      setIsCreating(false)
       return
     }
     
@@ -114,13 +126,23 @@ function CreateBucketContent() {
     if (!bucketName.trim()) {
       console.error('❌ Bucket name is empty')
       alert('Please enter a bucket name.')
+      setIsCreating(false)
       return
     }
     
     const parsedAmount = parseFloat(targetAmount.replace(/,/g, ''))
     if (!parsedAmount || parsedAmount <= 0) {
       console.error('❌ Invalid target amount:', parsedAmount)
-      alert('Please enter a valid target amount.')
+      setAmountError('Please enter a valid target amount.')
+      setIsCreating(false)
+      return
+    }
+    
+    // Check for $1M limit
+    if (parsedAmount > 1000000) {
+      console.error('❌ Amount exceeds $1M limit:', parsedAmount)
+      setAmountError('Target amount cannot exceed $1,000,000. Please enter a smaller amount.')
+      setIsCreating(false)
       return
     }
     
@@ -209,9 +231,19 @@ function CreateBucketContent() {
           alert('Failed to create bucket. Please try again.')
         }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ Error creating bucket:', error)
-      alert('An error occurred while creating the bucket. Please try again.')
+      setIsCreating(false)
+      
+      // Better error messages
+      if (error.message?.includes('timeout')) {
+        alert('Connection timeout. Please check your internet and try again.')
+      } else {
+        alert('Failed to create bucket. Please try again.')
+      }
+    } finally {
+      // Always reset creating state
+      setIsCreating(false)
     }
   }
 
@@ -236,8 +268,8 @@ function CreateBucketContent() {
           style={{ animation: 'fadeInUp 0.5s ease-out 0.2s both' }}
         >
           <h1 
-            className="text-[32px] font-semibold text-foreground"
-            style={{ letterSpacing: '-0.03em' }}
+            className="text-[32px] font-extrabold text-foreground"
+            style={{ letterSpacing: '-0.05em' }}
           >
             Create new bucket
           </h1>
@@ -273,7 +305,13 @@ function CreateBucketContent() {
               onChange={handleAmountChange}
               onBlur={handleAmountBlur}
               required
+              className={amountError ? 'border-red-500' : ''}
             />
+            {amountError && (
+              <p className="text-red-500 text-sm mt-2 animate-in slide-in-from-top-2 duration-300">
+                {amountError}
+              </p>
+            )}
           </div>
 
           {/* Color Picker */}
@@ -311,10 +349,10 @@ function CreateBucketContent() {
             <Button 
               type="submit" 
               variant="primary" 
-              disabled={!bucketName || !targetAmount}
+              disabled={!bucketName || !targetAmount || isCreating}
               onClick={() => console.log('🔘 Create bucket button clicked!', { bucketName, targetAmount })}
             >
-              Create bucket
+              {isCreating ? 'Creating...' : 'Create bucket'}
             </Button>
           </div>
         </form>
@@ -328,11 +366,11 @@ function CreateBucketContent() {
         <Button 
           type="submit" 
           variant="primary" 
-          disabled={!bucketName || !targetAmount}
+          disabled={!bucketName || !targetAmount || isCreating}
           onClick={handleSubmit}
           className="w-full"
         >
-          Create bucket
+          {isCreating ? 'Creating...' : 'Create bucket'}
         </Button>
       </div>
     </div>
