@@ -6,12 +6,12 @@ import { ActivityListItem } from "@/components/ui/activity-list-item"
 import { DropdownMenu, DropdownMenuItem } from "@/components/ui/dropdown-menu"
 import { ActivityListSkeleton } from "@/components/ui/skeleton-loader"
 import { ConfirmationModal } from "@/components/ui/modal"
-import { ArrowLeft, MoreVertical, Edit, Trash2, Plus, ArrowUpFromLine, Repeat, Download } from "lucide-react"
+import { ArrowLeft, MoreVertical, Edit, Trash2, Plus, Repeat } from "lucide-react"
 import ConfettiExplosion from 'react-confetti-explosion'
 import { useRouter, useSearchParams } from "next/navigation"
 import { Suspense, useState, useEffect, useRef } from "react"
 import { HybridStorage } from "@/lib/hybrid-storage"
-import { type Activity, type AutoDeposit, autoDepositService, supabase } from "@/lib/supabase"
+import { type Activity, type AutoDeposit, autoDepositService } from "@/lib/supabase"
 import { AutoDepositBanner } from "@/components/ui/auto-deposit-banner"
 import { useAuth } from "@/contexts/auth-context"
 
@@ -42,17 +42,23 @@ function transformActivityTitle(activity: Activity, currentBucketId: string): st
   }
   
   if (activity.activity_type === 'money_added') {
+    // First check if we already have a formatted title
+    if (activity.title && activity.title.startsWith('From ')) {
+      return activity.title
+    }
+    
     // Check source
     if (activity.from_source === 'main-bucket' || activity.from_source === 'Main Bucket') {
       return 'From Main Bucket'
     }
     
+    // If there's a from_source that's not main bucket or deposit, show it
+    if (activity.from_source && activity.from_source !== 'deposit' && activity.from_source !== 'external') {
+      return `From ${activity.from_source}`
+    }
+    
     // For main bucket, show more specific titles
     if (currentBucketId === 'main-bucket') {
-      // If it's coming from a specific bucket
-      if (activity.from_source && activity.from_source !== 'deposit' && activity.from_source !== 'external') {
-        return `From ${activity.from_source}`
-      }
       // If it's an external deposit
       if (!activity.from_source || activity.from_source === 'deposit' || activity.from_source === 'external') {
         return 'Deposited'
@@ -71,6 +77,11 @@ function transformActivityTitle(activity: Activity, currentBucketId: string): st
   }
   
   if (activity.activity_type === 'money_removed') {
+    // First check if we already have a formatted title
+    if (activity.title && activity.title.startsWith('To ')) {
+      return activity.title
+    }
+    
     // For main bucket, show where money went
     if (currentBucketId === 'main-bucket') {
       if (activity.to_destination && activity.to_destination !== 'withdrawal' && activity.to_destination !== 'external') {
@@ -83,6 +94,12 @@ function transformActivityTitle(activity: Activity, currentBucketId: string): st
     if (activity.to_destination === 'main-bucket' || activity.to_destination === 'Main Bucket') {
       return 'Sent to main'
     }
+    
+    // If there's a to_destination that's not main bucket or withdrawal, show it
+    if (activity.to_destination && activity.to_destination !== 'withdrawal' && activity.to_destination !== 'external') {
+      return `To ${activity.to_destination}`
+    }
+    
     return 'Withdrawn'
   }
   
@@ -293,19 +310,32 @@ function BucketDetailsContent() {
     return `/bucket-details?${params.toString()}`
   }
   
-  // For main bucket, override with real amount immediately to avoid jump
+  // Load actual amount from localStorage immediately to avoid display issues
   const [displayCurrentAmount, setDisplayCurrentAmount] = useState(() => {
-    if (bucketData.id === 'main-bucket' && typeof window !== 'undefined') {
+    if (typeof window !== 'undefined' && bucketData.id) {
       try {
-        // Try to get the main bucket amount from localStorage immediately
-        const mainBucketKey = `mainBucket_${user?.id || 'demo-user-id'}`
-        const mainBucketData = localStorage.getItem(mainBucketKey)
-        if (mainBucketData) {
-          const mainBucket = JSON.parse(mainBucketData)
-          return mainBucket.currentAmount
+        if (bucketData.id === 'main-bucket') {
+          // Try to get the main bucket amount from localStorage immediately
+          const mainBucketKey = `mainBucket_${user?.id || 'demo-user-id'}`
+          const mainBucketData = localStorage.getItem(mainBucketKey)
+          if (mainBucketData) {
+            const mainBucket = JSON.parse(mainBucketData)
+            return mainBucket.currentAmount
+          }
+        } else {
+          // Try to get the bucket amount from localStorage immediately
+          const bucketsKey = `buckets_${user?.id || 'demo-user-id'}`
+          const bucketsData = localStorage.getItem(bucketsKey)
+          if (bucketsData) {
+            const buckets = JSON.parse(bucketsData)
+            const bucket = buckets.find((b: { id: string; currentAmount: number }) => b.id === bucketData.id)
+            if (bucket) {
+              return bucket.currentAmount
+            }
+          }
         }
       } catch (e) {
-        console.warn('Error loading main bucket amount immediately:', e)
+        console.warn('Error loading bucket amount immediately:', e)
       }
     }
     return bucketData.currentAmount
@@ -585,7 +615,7 @@ function BucketDetailsContent() {
     }
     
     loadActivities()
-  }, [bucketData.id, user?.id])
+  }, [bucketData.id, bucketData.currentAmount, bucketData.targetAmount, user?.id, actualCurrentAmount])
 
   // Load auto deposits for this bucket
   useEffect(() => {
@@ -602,12 +632,14 @@ function BucketDetailsContent() {
             if (deposits && deposits.length > 0) {
               setAutoDeposits(deposits)
               console.log('✅ Loaded auto deposits from localStorage:', deposits)
+            } else {
+              setAutoDeposits([])
             }
           } catch (e) {
             console.warn('Error parsing local auto deposits:', e)
+            setAutoDeposits([])
           }
         } else {
-          console.log('❌ No auto deposits found in localStorage for bucket:', bucketData.id)
           // Clear auto deposits if none found locally, but still check database
           setAutoDeposits([])
         }
@@ -841,10 +873,6 @@ function BucketDetailsContent() {
                     Edit bucket
                   </DropdownMenuItem>
                 )}
-                <DropdownMenuItem>
-                  <ArrowUpFromLine className="h-4 w-4" />
-                  Withdraw money
-                </DropdownMenuItem>
                 {/* Only show auto deposit option if bucket is not completed */}
                 {!(displayCurrentAmount >= bucketData.targetAmount) && (
                   <>
@@ -872,24 +900,20 @@ function BucketDetailsContent() {
                   </DropdownMenuItem>
                 )}
               </DropdownMenu>
-              <Button 
-                variant="primary-black" 
-                icon={bucketData.id !== 'main-bucket' && displayCurrentAmount >= bucketData.targetAmount ? <Download /> : <Plus />} 
-                iconPosition="left"
-                className="!bg-black !text-white"
-                onClick={() => {
-                  if (bucketData.id !== 'main-bucket' && displayCurrentAmount >= bucketData.targetAmount) {
-                    alert('Withdraw functionality coming soon!')
-                  } else {
+              {/* Only show Add money button for non-completed buckets and main bucket */}
+              {(bucketData.id === 'main-bucket' || displayCurrentAmount < bucketData.targetAmount) && (
+                <Button 
+                  variant="primary-black" 
+                  icon={<Plus />} 
+                  iconPosition="left"
+                  className="!bg-black !text-white"
+                  onClick={() => {
                     router.push(`/add-money?to=${bucketData.id}&source=${encodeURIComponent(createCompleteSourceURL())}`)
-                  }
-                }}
-              >
-                {bucketData.id === 'main-bucket' 
-                  ? 'Add funds' 
-                  : (displayCurrentAmount >= bucketData.targetAmount ? 'Withdraw' : 'Add money')
-                }
-              </Button>
+                  }}
+                >
+                  {bucketData.id === 'main-bucket' ? 'Add funds' : 'Add money'}
+                </Button>
+              )}
             </div>
           </div>
         </div>
@@ -947,10 +971,6 @@ function BucketDetailsContent() {
                   Edit bucket
                 </DropdownMenuItem>
               )}
-              <DropdownMenuItem>
-                <ArrowUpFromLine className="h-4 w-4" />
-                Withdraw money
-              </DropdownMenuItem>
               {/* Only show auto deposit option if bucket is not completed */}
               {!(displayCurrentAmount >= bucketData.targetAmount) && (
                 <>
@@ -978,26 +998,20 @@ function BucketDetailsContent() {
                 </DropdownMenuItem>
               )}
             </DropdownMenu>
-            <Button 
-              variant="primary-black" 
-              icon={bucketData.id !== 'main-bucket' && displayCurrentAmount >= bucketData.targetAmount ? <Download /> : <Plus />} 
-              iconPosition="left"
-              className="!bg-black !text-white"
-              onClick={() => {
-                // If bucket is completed, show withdraw action, otherwise add money
-                if (bucketData.id !== 'main-bucket' && displayCurrentAmount >= bucketData.targetAmount) {
-                  // TODO: Navigate to withdraw page when implemented
-                  alert('Withdraw functionality coming soon!')
-                } else {
+            {/* Only show Add money button for non-completed buckets and main bucket */}
+            {(bucketData.id === 'main-bucket' || displayCurrentAmount < bucketData.targetAmount) && (
+              <Button 
+                variant="primary-black" 
+                icon={<Plus />} 
+                iconPosition="left"
+                className="!bg-black !text-white"
+                onClick={() => {
                   router.push(`/add-money?to=${bucketData.id}&source=${encodeURIComponent(createCompleteSourceURL())}`)
-                }
-              }}
-            >
-              {bucketData.id === 'main-bucket' 
-                ? 'Add funds' 
-                : (displayCurrentAmount >= bucketData.targetAmount ? 'Withdraw' : 'Add money')
-              }
-            </Button>
+                }}
+              >
+                {bucketData.id === 'main-bucket' ? 'Add funds' : 'Add money'}
+              </Button>
+            )}
           </div>
         </div>
 
@@ -1020,8 +1034,8 @@ function BucketDetailsContent() {
           
           {/* Title */}
           <h1 
-            className="text-[36px] font-extrabold text-black mb-0"
-            style={{ letterSpacing: '-0.04em' }}
+            className="text-[32px] font-extrabold text-black mb-0"
+            style={{ letterSpacing: '-0.05em' }}
           >
             {bucketData.title}
           </h1>
@@ -1068,7 +1082,7 @@ function BucketDetailsContent() {
               showCompletionBadge={false}
               className="w-full" 
             />
-            {animatedProgress < 100 && (
+            {animatedProgress < 90 && (
               <div 
                 className="absolute top-1/2 transform -translate-y-1/2 pointer-events-none"
                 style={{ left: `max(calc(${animatedProgress}% + 8px), 16px)` }}
@@ -1081,9 +1095,14 @@ function BucketDetailsContent() {
           </div>
         )}
 
-        {/* Auto deposit banner - only for savings buckets with auto deposits */}
+        {/* Auto deposit banner - only for savings buckets with auto deposits and not completed */}
         {(() => {
-          const showBanner = bucketData.id !== 'main-bucket' && !loadingAutoDeposits && autoDeposits.length > 0
+          const isCompleted = displayCurrentAmount >= bucketData.targetAmount
+          const showBanner = bucketData.id !== 'main-bucket' && 
+                            !loadingAutoDeposits && 
+                            autoDeposits.length > 0 && 
+                            !isCompleted
+          
           return showBanner ? (
             <AutoDepositBanner 
               autoDeposit={autoDeposits[0]} 
@@ -1092,58 +1111,6 @@ function BucketDetailsContent() {
           ) : null
         })()}
 
-        {/* TEMPORARY: Delete all auto deposits button */}
-        <button 
-          onClick={async () => {
-            try {
-              console.log('🗑️ Deleting all auto deposits for user...')
-              // Get all auto deposits for this user
-              const { data: userAutoDeposits, error: fetchError } = await supabase
-                .from('auto_deposits')
-                .select('*')
-                .eq('user_id', user?.id)
-              
-              if (fetchError) {
-                console.error('Error fetching auto deposits:', fetchError)
-                return
-              }
-              
-              // Delete each one
-              for (const autoDeposit of userAutoDeposits || []) {
-                const { error: deleteError } = await supabase
-                  .from('auto_deposits')
-                  .delete()
-                  .eq('id', autoDeposit.id)
-                
-                if (deleteError) {
-                  console.error('Error deleting auto deposit:', deleteError)
-                } else {
-                  console.log('✅ Deleted auto deposit:', autoDeposit.id)
-                  // Remove from localStorage
-                  localStorage.removeItem(`auto_deposits_${autoDeposit.bucket_id}`)
-                }
-              }
-              
-              alert(`Deleted ${userAutoDeposits?.length || 0} auto deposits. Refreshing page...`)
-              window.location.reload()
-            } catch (error) {
-              console.error('Error:', error)
-              alert('Error deleting auto deposits')
-            }
-          }}
-          style={{
-            background: '#ff4444',
-            color: 'white',
-            padding: '12px 20px',
-            margin: '20px 0',
-            border: 'none',
-            borderRadius: '8px',
-            cursor: 'pointer',
-            fontWeight: 'bold'
-          }}
-        >
-          🗑️ DELETE ALL AUTO DEPOSITS (TEMP)
-        </button>
 
         {/* Activity list */}
         <div style={{ animation: 'fadeInUp 0.5s ease-out 0.4s both' }}>

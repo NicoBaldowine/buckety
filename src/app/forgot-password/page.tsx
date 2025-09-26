@@ -4,9 +4,10 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useRouter } from "next/navigation"
-import { useState, useRef, useEffect } from "react"
+import { useState, useRef } from "react"
 import { authService } from "@/lib/auth"
 import { ArrowLeft } from "lucide-react"
+import { VerificationInput } from "@/components/ui/verification-input"
 
 export default function ForgotPasswordPage() {
   const router = useRouter()
@@ -121,13 +122,16 @@ export default function ForgotPasswordPage() {
             style={{ animation: 'fadeInUp 0.5s ease-out 0.2s both' }}
           >
             <h1 
-              className="text-[32px] font-extrabold text-foreground"
+              className="text-[32px] font-extrabold text-foreground text-center"
               style={{ letterSpacing: '-0.05em' }}
             >
               Check your email
             </h1>
-            <p className="text-foreground/60 mt-2">
-              We sent a verification code to {email}
+            <p className="text-foreground/60 mt-2 text-center">
+              We sent a 6-digit code to
+            </p>
+            <p className="text-foreground font-semibold text-center">
+              {email}
             </p>
           </div>
 
@@ -135,19 +139,12 @@ export default function ForgotPasswordPage() {
           <form onSubmit={handleVerification} className="space-y-6">
             <div 
               style={{ animation: 'fadeInUp 0.5s ease-out 0.3s both' }}
+              className="space-y-3"
             >
-              <Label htmlFor="code">Verification code</Label>
-              <Input
-                id="code"
-                type="text"
-                maxLength={6}
-                pattern="[0-9]{6}"
-                placeholder="Enter 6-digit code"
+              <Label className="block text-center">Verification code</Label>
+              <VerificationInput
                 value={verificationCode}
-                onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, ''))}
-                required
-                autoComplete="one-time-code"
-                className="text-center text-xl font-mono tracking-wider"
+                onChange={setVerificationCode}
               />
             </div>
 
@@ -181,16 +178,16 @@ export default function ForgotPasswordPage() {
               style={{ animation: 'fadeInUp 0.5s ease-out 0.5s both' }}
             >
               <p className="text-[14px] text-foreground/60">
-                Didn't receive a code?{' '}
-                <button 
-                  type="button"
-                  onClick={handleResend}
-                  disabled={isSubmitting}
-                  className="text-foreground font-semibold hover:opacity-80 transition-opacity"
-                >
-                  Resend
-                </button>
+                Didn't receive the code?
               </p>
+              <button 
+                type="button"
+                onClick={handleResend}
+                disabled={isSubmitting}
+                className="text-foreground font-semibold hover:opacity-80 transition-opacity text-[14px] underline"
+              >
+                Resend code
+              </button>
             </div>
           </form>
         </div>

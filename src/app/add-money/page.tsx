@@ -18,6 +18,12 @@ interface Account {
   backgroundColor?: string
 }
 
+interface Activity {
+  title: string
+  amount: number
+  date: string
+}
+
 export default function AddMoneyPage() {
   return (
     <ProtectedRoute>
@@ -322,8 +328,8 @@ function AddMoneyContent() {
         const todayDate = new Date().toISOString().split('T')[0]
         
         // Remove exact duplicates by title, amount, and date
-        const cleanedActivities = currentActivities.filter((activity: any, index: number) => {
-          return !currentActivities.slice(0, index).some((existing: any) =>
+        const cleanedActivities = currentActivities.filter((activity: Activity, index: number) => {
+          return !currentActivities.slice(0, index).some((existing: Activity) =>
             existing.title === activity.title &&
             Math.abs(existing.amount - activity.amount) < 0.01 &&
             existing.date === activity.date
@@ -484,8 +490,8 @@ function AddMoneyContent() {
         
         // Additional cleanup for auto-deposit scenarios
         const currentActivities = JSON.parse(localStorage.getItem(`activities_${bucket.id}`) || '[]')
-        const cleanedActivities = currentActivities.filter((activity: any, index: number) => {
-          return !currentActivities.slice(0, index).some((existing: any) =>
+        const cleanedActivities = currentActivities.filter((activity: Activity, index: number) => {
+          return !currentActivities.slice(0, index).some((existing: Activity) =>
             existing.title === activity.title &&
             Math.abs(existing.amount - activity.amount) < 0.01 &&
             existing.date === activity.date

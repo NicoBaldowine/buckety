@@ -231,12 +231,12 @@ function CreateBucketContent() {
           alert('Failed to create bucket. Please try again.')
         }
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('❌ Error creating bucket:', error)
       setIsCreating(false)
       
-      // Better error messages
-      if (error.message?.includes('timeout')) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      if (errorMessage.includes('timeout')) {
         alert('Connection timeout. Please check your internet and try again.')
       } else {
         alert('Failed to create bucket. Please try again.')
