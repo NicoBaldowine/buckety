@@ -9,8 +9,16 @@ import { ArrowLeft } from "lucide-react"
 import { Suspense } from "react"
 import { bucketService } from "@/lib/supabase"
 
-// Sample products data for different brands
-const brandProducts = {
+interface Product {
+  id: number
+  name: string
+  originalPrice: number
+  discountedPrice: number
+  discount: string
+  image?: string
+}
+
+const brandProducts: Record<string, Product[]> = {
   'Nike': [
     {
       id: 1,
