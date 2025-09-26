@@ -205,7 +205,7 @@ export class HybridStorage {
           bucket_id: toBucketId,
           title: `From Main Bucket`,
           amount: amount,
-          activity_type: 'money_added',
+          activity_type: 'money_added' as const,
           from_source: 'Main Bucket',
           to_destination: toBucket.title,
           date: getLocalDate(),
