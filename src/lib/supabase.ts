@@ -443,8 +443,8 @@ export const activityService = {
         return null
       }
       
-      // Verify user owns the bucket before creating activity
-      if (activity.bucket_id) {
+      // Verify user owns the bucket before creating activity (skip if user_id was explicitly provided)
+      if (activity.bucket_id && !activity.user_id) {
         const { data: bucketCheck, error: bucketError } = await supabase
           .from('buckets')
           .select('user_id')
@@ -1031,8 +1031,7 @@ export const autoDepositService = {
     
     switch (repeatType) {
       case 'daily':
-        // For testing: set to 1 minute ago so it's immediately due
-        nextDate.setTime(now.getTime() - 60 * 1000) // 1 minute in the past for immediate execution
+        nextDate.setDate(now.getDate() + 1) // Daily = 24 hours
         break
       case 'weekly':
         nextDate.setDate(now.getDate() + 7)
@@ -1076,6 +1075,7 @@ export const autoDepositService = {
           updated_at: new Date().toISOString()
         })
         .eq('id', id)
+        .eq('user_id', user?.id) // Add user filter for RLS
         .select()
         .single()
       
@@ -1206,11 +1206,21 @@ export const autoDepositService = {
           const bucket = await bucketService.getBucket(autoDeposit.bucket_id)
           if (!bucket) continue
           
-          // Skip if bucket is completed and end_type is bucket_completed
-          if (autoDeposit.end_type === 'bucket_completed' && 
-              bucket.current_amount >= bucket.target_amount) {
+          // Auto-disable if bucket is completed (regardless of end_type)
+          if (bucket.current_amount >= bucket.target_amount) {
+            console.log(`🎯 Bucket ${bucket.title} is complete. Marking auto-deposit as completed.`)
+            
             // Mark auto deposit as completed
             await this.updateAutoDepositStatus(autoDeposit.id, 'completed')
+            
+            // Create notification
+            await notificationService.createNotification({
+              user_id: autoDeposit.user_id,
+              title: 'Goal Reached! 🎉',
+              message: `Your ${bucket.title} bucket is complete! Auto-deposit has been completed.`,
+              type: 'auto_deposit',
+              bucket_id: autoDeposit.bucket_id
+            })
             continue
           }
           
@@ -1223,17 +1233,21 @@ export const autoDepositService = {
           }
           
           // Execute the transfer from main bucket to the target bucket
+          console.log(`💰 Executing auto-deposit: $${autoDeposit.amount} from Main Bucket to ${bucket.title}`)
           const transferResult = await mainBucketService.transferFromMainBucket(
             autoDeposit.user_id,
             autoDeposit.bucket_id,
             autoDeposit.amount
           )
           
+          console.log(`💰 Transfer result:`, transferResult)
+          
           if (transferResult.success) {
             // Create activity record for the auto deposit with time
             const timeString = now.toLocaleTimeString('en-US', { 
               hour: '2-digit', 
               minute: '2-digit',
+              second: '2-digit',
               hour12: true 
             })
             await activityService.createActivity({
@@ -1244,7 +1258,8 @@ export const autoDepositService = {
               from_source: 'Main Bucket',
               to_destination: bucket.title,
               date: now.toISOString().split('T')[0],
-              description: `Auto deposit of $${autoDeposit.amount} at ${timeString}`
+              description: `Auto deposit of $${autoDeposit.amount} at ${timeString}`,
+              user_id: autoDeposit.user_id // Explicitly pass user_id for RLS
             })
             
             // Create notification for the auto deposit
@@ -1257,10 +1272,10 @@ export const autoDepositService = {
             })
             
             // Calculate next execution date
-            let nextDate = new Date(autoDeposit.next_execution_date)
+            const nextDate = new Date(autoDeposit.next_execution_date)
             switch (autoDeposit.repeat_type) {
               case 'daily':
-                nextDate.setTime(nextDate.getTime() + 2 * 60 * 1000) // 2 minutes for testing
+                nextDate.setDate(nextDate.getDate() + 1) // Daily = 24 hours
                 break
               case 'weekly':
                 nextDate.setDate(nextDate.getDate() + 7)
@@ -1278,13 +1293,15 @@ export const autoDepositService = {
                 break
             }
             
-            // Update next execution date (full timestamp for testing)
-            await this.updateAutoDeposit(autoDeposit.id, {
+            // Update next execution date immediately to prevent duplicate executions
+            console.log(`⏰ Updating next execution from ${autoDeposit.next_execution_date} to ${nextDate.toISOString()}`)
+            const updateResult = await this.updateAutoDeposit(autoDeposit.id, {
               next_execution_date: nextDate.toISOString()
             })
+            console.log(`📝 Update result:`, updateResult ? 'SUCCESS' : 'FAILED')
             
             executedCount++
-            console.log(`✅ Auto deposit executed for bucket ${bucket.title}: $${autoDeposit.amount}`)
+            console.log(`✅ Auto deposit executed for bucket ${bucket.title}: $${autoDeposit.amount} (Next: ${nextDate.toLocaleTimeString()})`)
           }
         } catch (error) {
           console.error(`Error executing auto deposit ${autoDeposit.id}:`, error)

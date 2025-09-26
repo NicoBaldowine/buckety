@@ -566,7 +566,7 @@ export class HybridStorage {
         const userSpecificKey = `main_bucket_transfers_${targetUserId}`
         console.log('🔍 Looking for Main Bucket activities in key:', userSpecificKey)
         
-        let transferHistory = localStorage.getItem(userSpecificKey)
+        const transferHistory = localStorage.getItem(userSpecificKey)
         
         // Don't migrate global data for Main Bucket as it contains activities from ALL users
         // Only use user-specific data
