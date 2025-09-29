@@ -54,25 +54,27 @@ export default function LandingPage() {
         setShowStickyHeader(headerBottom < 0)
       }
 
-      // Bucket scroll-out animations - reverse of entrance
       const scrollY = window.scrollY
       const bucketCards = document.querySelectorAll('.bucket-scroll-animation')
       
       bucketCards.forEach((card: Element) => {
-        // Start animating out when scrolled past 100px
-        if (scrollY > 100) {
-          const disappearProgress = Math.min(1, (scrollY - 100) / 200)
-          const scale = 1 - (disappearProgress * 0.5)
-          const opacity = 1 - disappearProgress
-          const translateY = disappearProgress * -30
+        const bucketIndex = parseInt((card as HTMLElement).getAttribute('data-bucket-index') || '0')
+        const staggerDelay = bucketIndex * 30
+        const startScrollPoint = 50 + staggerDelay
+        
+        if (scrollY > startScrollPoint) {
+          const disappearProgress = Math.min(1, (scrollY - startScrollPoint) / 150)
+          const scale = 1 - (disappearProgress * 0.6)
+          const opacity = 1 - (disappearProgress * 1.5)
+          const translateY = disappearProgress * -50
           
           ;(card as HTMLElement).style.transform = `scale(${scale}) translateY(${translateY}px)`
-          ;(card as HTMLElement).style.opacity = opacity.toString()
-          ;(card as HTMLElement).style.transition = 'all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)'
+          ;(card as HTMLElement).style.opacity = Math.max(0, opacity).toString()
+          ;(card as HTMLElement).style.transition = 'transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.4s ease-out'
         } else {
           ;(card as HTMLElement).style.transform = 'scale(1) translateY(0px)'
           ;(card as HTMLElement).style.opacity = '1'
-          ;(card as HTMLElement).style.transition = 'all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)'
+          ;(card as HTMLElement).style.transition = 'transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.4s ease-out'
         }
       })
 
@@ -113,9 +115,9 @@ export default function LandingPage() {
 
   return (
     <div className="min-h-screen">
-      {/* Sticky Buttons Only */}
+      {/* Desktop Sticky Buttons - Only visible on desktop when scrolled */}
       <div 
-        className={`fixed top-8 right-10 z-50 transition-all duration-300 ${
+        className={`hidden md:block fixed top-8 right-10 z-50 transition-all duration-300 ${
           showStickyHeader ? 'translate-y-0 opacity-100' : '-translate-y-full opacity-0'
         }`}
       >
@@ -137,17 +139,38 @@ export default function LandingPage() {
         </div>
       </div>
 
+      {/* Mobile Sticky Buttons - Floating at bottom */}
+      <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 pb-5">
+        <div className="flex justify-center gap-4 px-5">
+          <Button 
+            variant="secondary"
+            onClick={() => router.push('/sign-up')}
+            className="text-black bg-white border-2 border-black hover:bg-gray-50 py-5 px-8 text-base font-semibold rounded-xl shadow-lg"
+          >
+            Get Started
+          </Button>
+          <Button 
+            variant="secondary"
+            onClick={() => router.push('/login')}
+            className="text-white bg-[#2d2d2d] hover:bg-[#2d2d2d]/90 border-2 border-[#2d2d2d] py-5 px-8 text-base font-semibold rounded-xl shadow-lg"
+          >
+            Login
+          </Button>
+        </div>
+      </div>
+
 
       {/* Hero Section with Animated Buckets - Combined */}
-      <div style={{ backgroundColor: '#ffffff', minHeight: '100vh' }} className="flex flex-col">
-        <div className="w-full px-6 md:px-10 min-h-screen flex flex-col relative">
+      <div style={{ backgroundColor: '#ffffff', minHeight: '100vh' }} className="flex flex-col pb-24 md:pb-0">
+        <div className="w-full px-4 min-h-screen flex flex-col relative">
         {/* Header */}
         <header 
           ref={headerRef}
-          className="w-full max-w-[1400px] mx-auto flex items-center justify-between pt-8 pb-6"
+          className="w-full flex items-center justify-between pt-6 pb-6 px-6 md:px-6"
           style={{ animation: 'slideInFromTop 0.4s ease-out 0.1s both' }}
         >
-          <div className="flex items-center">
+          {/* Mobile Logo - Fixed position closer to edges */}
+          <div className="md:hidden absolute top-3 left-1 z-40">
             <div className="relative w-44 h-14">
               <Image 
                 src="/zuma-light.svg" 
@@ -158,7 +181,20 @@ export default function LandingPage() {
             </div>
           </div>
           
-          <div className="flex items-center gap-4">
+          {/* Desktop Logo */}
+          <div className="hidden md:flex items-center">
+            <div className="relative w-44 h-14">
+              <Image 
+                src="/zuma-light.svg" 
+                alt="Zuma Logo" 
+                fill
+                className="object-contain object-left"
+              />
+            </div>
+          </div>
+          
+          {/* Desktop Buttons Only */}
+          <div className="hidden md:flex items-center gap-4">
             <Button 
               variant="secondary"
               onClick={() => router.push('/sign-up')}
@@ -181,14 +217,15 @@ export default function LandingPage() {
 
         {/* Main Content with Buckets */}
         <main className="flex-1 flex items-center justify-center py-8 relative">
-          {/* Animated Bucket Cards around the title */}
+          {/* Animated Bucket Cards around the title - Both Desktop and Mobile */}
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            {/* Cancun Trip - Moved 10px up */}
+            {/* Cancun Trip */}
             <div 
               className="absolute bucket-card pointer-events-auto bucket-scroll-animation"
+              data-bucket-index="0"
               style={{
-                top: '90px',
-                left: '150px',
+                top: '120px',
+                left: '10px',
                 zIndex: 20,
                 '--delay': '0.8s',
                 '--color': '#B6F3AD',
@@ -207,12 +244,13 @@ export default function LandingPage() {
               </div>
             </div>
 
-            {/* Laksik Procedure - Moved 10px up */}
+            {/* Laksik Procedure */}
             <div 
               className="absolute bucket-card pointer-events-auto bucket-scroll-animation"
+              data-bucket-index="1"
               style={{
-                top: '90px',
-                right: '100px',
+                top: '120px',
+                right: '10px',
                 zIndex: 20,
                 '--delay': '1.0s',
                 '--color': '#FFDA2A',
@@ -231,12 +269,14 @@ export default function LandingPage() {
               </div>
             </div>
 
-            {/* Nintendo Switch - Much lower position */}
+            {/* Nintendo Switch */}
             <div 
               className="absolute bucket-card pointer-events-auto bucket-scroll-animation"
+              data-bucket-index="2"
               style={{
-                top: '320px',
-                left: '150px',
+                top: '50%',
+                left: '10px',
+                transform: 'translateY(-50%)',
                 zIndex: 20,
                 '--delay': '1.2s',
                 '--color': '#ABE9FA',
@@ -255,12 +295,14 @@ export default function LandingPage() {
               </div>
             </div>
 
-            {/* Electric Guitar - Moved up and left */}
+            {/* Electric Guitar */}
             <div 
               className="absolute bucket-card pointer-events-auto bucket-scroll-animation"
+              data-bucket-index="3"
               style={{
-                bottom: '380px',
-                right: '450px',
+                top: '50%',
+                right: '10px',
+                transform: 'translateY(-50%)',
                 zIndex: 20,
                 '--delay': '1.4s',
                 '--color': '#FF7261',
@@ -279,12 +321,13 @@ export default function LandingPage() {
               </div>
             </div>
 
-            {/* FIFA Worldcup - Moved 10px down */}
+            {/* FIFA Worldcup */}
             <div 
               className="absolute bucket-card pointer-events-auto bucket-scroll-animation"
+              data-bucket-index="4"
               style={{
-                bottom: '140px',
-                left: '200px',
+                bottom: '160px',
+                left: '10px',
                 zIndex: 20,
                 '--delay': '1.6s',
                 '--color': '#31A7FE',
@@ -303,12 +346,13 @@ export default function LandingPage() {
               </div>
             </div>
 
-            {/* iPhone 17 - Moved 10px down */}
+            {/* iPhone 17 */}
             <div 
               className="absolute bucket-card pointer-events-auto bucket-scroll-animation"
+              data-bucket-index="5"
               style={{
-                bottom: '140px',
-                right: '100px',
+                bottom: '160px',
+                right: '10px',
                 zIndex: 20,
                 '--delay': '1.8s',
                 '--color': '#F7C250',
@@ -331,9 +375,8 @@ export default function LandingPage() {
           {/* Main Heading - Desktop: 2 lines, Mobile: 4 lines */}
           <div className="w-full text-center relative z-10">
             <h1 
-              className="font-normal text-black leading-[0.8] uppercase" 
+              className="font-normal text-black leading-[0.8] uppercase robuck-font" 
               style={{ 
-                fontFamily: 'Robuck, sans-serif', 
                 letterSpacing: '0', 
                 animation: 'fadeInUp 0.5s ease-out 0.2s both',
                 fontSize: 'clamp(80px, 18vw, 250px)'
@@ -344,10 +387,10 @@ export default function LandingPage() {
               <span className="hidden md:block">SAVING ACCOUNT</span>
               
               {/* Mobile: 4 lines */}
-              <span className="block md:hidden" style={{ fontSize: 'clamp(60px, 20vw, 100px)' }}>YOUR</span>
-              <span className="block md:hidden" style={{ fontSize: 'clamp(60px, 20vw, 100px)' }}>MODERN</span>
-              <span className="block md:hidden" style={{ fontSize: 'clamp(60px, 20vw, 100px)' }}>SAVING</span>
-              <span className="block md:hidden" style={{ fontSize: 'clamp(60px, 20vw, 100px)' }}>ACCOUNT</span>
+              <span className="block md:hidden" style={{ fontSize: 'clamp(80px, 24vw, 120px)' }}>YOUR</span>
+              <span className="block md:hidden" style={{ fontSize: 'clamp(80px, 24vw, 120px)' }}>MODERN</span>
+              <span className="block md:hidden" style={{ fontSize: 'clamp(80px, 24vw, 120px)' }}>SAVING</span>
+              <span className="block md:hidden" style={{ fontSize: 'clamp(80px, 24vw, 120px)' }}>ACCOUNT</span>
             </h1>
           </div>
         </main>
@@ -468,10 +511,28 @@ export default function LandingPage() {
           z-index: 1;
         }
 
-        /* Responsive behavior */
+        /* Mobile bucket cards */
         @media (max-width: 768px) {
           .bucket-card {
-            display: none;
+            width: 160px !important;
+            height: 75px !important;
+          }
+          
+          .bucket-content {
+            padding: 10px 12px !important;
+          }
+          
+          .bucket-content span:first-child {
+            font-size: 12px !important;
+          }
+          
+          .bucket-content .progress-container {
+            height: 22px !important;
+          }
+          
+          .progress-text {
+            font-size: 10px !important;
+            right: 8px !important;
           }
         }
 
@@ -607,13 +668,13 @@ export default function LandingPage() {
       <div 
         ref={setSectionRef('buckets')}
         style={{ backgroundColor: '#000000' }}
-        className="py-[120px] md:h-[760px] md:py-0"
+        className="py-[60px] md:py-[120px] md:h-[760px]"
       >
         <div className="max-w-[1200px] mx-auto px-5 md:px-10 h-full flex items-center">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-20 items-center w-full">
             {/* Left side - Visual placeholder */}
             <div 
-              className="flex items-center justify-center order-2 md:order-1"
+              className="flex items-center justify-center order-2 md:order-1 px-0"
               style={{ 
                 animation: visibleSections.has('buckets') ? 'fadeInUp 0.5s ease-out 0.1s both' : 'none',
                 opacity: visibleSections.has('buckets') ? 1 : 0,
@@ -622,7 +683,7 @@ export default function LandingPage() {
               }}
             >
               <div 
-                className="w-full max-w-[320px] md:max-w-[545px] aspect-[545/508] md:w-[545px] md:h-[508px]"
+                className="w-full md:max-w-[545px] aspect-[545/508] md:w-[545px] md:h-[508px]"
                 style={{ 
                   backgroundColor: '#1A1A1A',
                   borderRadius: '20px',
@@ -667,7 +728,7 @@ export default function LandingPage() {
       <div 
         ref={setSectionRef('mirror')}
         style={{ backgroundColor: '#ffffff' }}
-        className="py-[120px] md:h-[760px] md:py-0"
+        className="py-[60px] md:py-[120px] md:h-[760px]"
       >
         <div className="max-w-[1200px] mx-auto px-5 md:px-10 h-full flex items-center">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-20 items-center w-full">
@@ -699,7 +760,7 @@ export default function LandingPage() {
 
             {/* Right side - Visual placeholder (reversed position) */}
             <div 
-              className="flex items-center justify-center order-2 md:order-2"
+              className="flex items-center justify-center order-2 md:order-2 px-0"
               style={{ 
                 animation: visibleSections.has('mirror') ? 'fadeInUp 0.5s ease-out 0.2s both' : 'none',
                 opacity: visibleSections.has('mirror') ? 1 : 0,
@@ -708,7 +769,7 @@ export default function LandingPage() {
               }}
             >
               <div 
-                className="w-full max-w-[320px] md:max-w-[545px] aspect-[545/508] md:w-[545px] md:h-[508px] relative overflow-hidden"
+                className="w-full md:max-w-[545px] aspect-[545/508] md:w-[545px] md:h-[508px] relative overflow-hidden"
                 style={{ 
                   backgroundColor: '#F9F9F9',
                   borderRadius: '20px',
@@ -773,13 +834,13 @@ export default function LandingPage() {
       <div 
         ref={setSectionRef('marketplace')}
         style={{ backgroundColor: '#000000' }}
-        className="py-[120px] md:h-[760px] md:py-0"
+        className="py-[60px] md:py-[120px] md:h-[760px]"
       >
         <div className="max-w-[1200px] mx-auto px-5 md:px-10 h-full flex items-center">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-20 items-center w-full">
             {/* Left side - Visual placeholder */}
             <div 
-              className="flex items-center justify-center order-2 md:order-1"
+              className="flex items-center justify-center order-2 md:order-1 px-0"
               style={{ 
                 animation: visibleSections.has('marketplace') ? 'fadeInUp 0.5s ease-out 0.1s both' : 'none',
                 opacity: visibleSections.has('marketplace') ? 1 : 0,
@@ -788,7 +849,7 @@ export default function LandingPage() {
               }}
             >
               <div 
-                className="w-full max-w-[320px] md:max-w-[545px] aspect-[545/508] md:w-[545px] md:h-[508px]"
+                className="w-full md:max-w-[545px] aspect-[545/508] md:w-[545px] md:h-[508px]"
                 style={{ 
                   backgroundColor: '#1A1A1A',
                   borderRadius: '20px',
@@ -833,7 +894,7 @@ export default function LandingPage() {
       <div 
         ref={setSectionRef('automation')}
         style={{ backgroundColor: '#FFDA2A' }}
-        className="py-[120px] md:h-[760px] md:py-0"
+        className="py-[60px] md:py-[120px] md:h-[760px]"
       >
         <div className="max-w-[1200px] mx-auto px-5 md:px-10 h-full flex items-center">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-20 items-center w-full">
@@ -865,7 +926,7 @@ export default function LandingPage() {
 
             {/* Right side - Visual placeholder (reversed position) */}
             <div 
-              className="flex items-center justify-center order-2 md:order-2"
+              className="flex items-center justify-center order-2 md:order-2 px-0"
               style={{ 
                 animation: visibleSections.has('automation') ? 'fadeInUp 0.5s ease-out 0.2s both' : 'none',
                 opacity: visibleSections.has('automation') ? 1 : 0,
@@ -874,7 +935,7 @@ export default function LandingPage() {
               }}
             >
               <div 
-                className="w-full max-w-[320px] md:max-w-[545px] aspect-[545/508] md:w-[545px] md:h-[508px]"
+                className="w-full md:max-w-[545px] aspect-[545/508] md:w-[545px] md:h-[508px]"
                 style={{ 
                   backgroundColor: '#F0D000',
                   borderRadius: '20px',
@@ -893,13 +954,13 @@ export default function LandingPage() {
       <div 
         ref={setSectionRef('updates')}
         style={{ backgroundColor: '#000000' }}
-        className="py-[120px] md:h-[760px] md:py-0"
+        className="py-[60px] md:py-[120px] md:h-[760px]"
       >
         <div className="max-w-[1200px] mx-auto px-5 md:px-10 h-full flex items-center">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-20 items-center w-full">
             {/* Left side - Visual placeholder */}
             <div 
-              className="flex items-center justify-center order-2 md:order-1"
+              className="flex items-center justify-center order-2 md:order-1 px-0"
               style={{ 
                 animation: visibleSections.has('updates') ? 'fadeInUp 0.5s ease-out 0.1s both' : 'none',
                 opacity: visibleSections.has('updates') ? 1 : 0,
@@ -908,7 +969,7 @@ export default function LandingPage() {
               }}
             >
               <div 
-                className="w-full max-w-[320px] md:max-w-[545px] aspect-[545/508] md:w-[545px] md:h-[508px]"
+                className="w-full md:max-w-[545px] aspect-[545/508] md:w-[545px] md:h-[508px]"
                 style={{ 
                   backgroundColor: '#1A1A1A',
                   borderRadius: '20px',
@@ -950,9 +1011,10 @@ export default function LandingPage() {
       </div>
 
       {/* Footer */}
-      <footer style={{ backgroundColor: '#ffffff' }} className="py-16 md:py-20">
-        <div className="max-w-[1200px] mx-auto px-5 md:px-10">
-          <div className="grid grid-cols-2 gap-20">
+      <footer style={{ backgroundColor: '#ffffff' }} className="pt-4 pb-24 md:py-20">
+        <div className="max-w-[1200px] mx-auto px-1 md:px-10">
+          {/* Desktop Layout */}
+          <div className="hidden md:grid grid-cols-2 gap-20">
             {/* Left side - Logo and Copyright */}
             <div>
               <div className="mb-8">
@@ -995,6 +1057,48 @@ export default function LandingPage() {
                 </a>
               </div>
             </div>
+          </div>
+
+          {/* Mobile Layout */}
+          <div className="md:hidden">
+            {/* Logo */}
+            <div className="mb-4">
+              <div className="relative w-44 h-14">
+                <Image 
+                  src="/zuma-light.svg" 
+                  alt="Zuma Logo" 
+                  fill
+                  className="object-contain object-left"
+                />
+              </div>
+            </div>
+
+            {/* All Links Aligned Left */}
+            <div className="flex flex-col space-y-4 mb-8">
+              <a href="/pricing" className="text-[#1A1A1A] text-[16px] font-medium hover:text-gray-600 transition-colors">
+                Pricing
+              </a>
+              <a href="/terms" className="text-[#1A1A1A] text-[16px] font-medium hover:text-gray-600 transition-colors">
+                Terms
+              </a>
+              <a href="/about" className="text-[#1A1A1A] text-[16px] font-medium hover:text-gray-600 transition-colors">
+                About us
+              </a>
+              <a href="/privacy" className="text-[#1A1A1A] text-[16px] font-medium hover:text-gray-600 transition-colors">
+                Privacy
+              </a>
+              <a href="/contact" className="text-[#1A1A1A] text-[16px] font-medium hover:text-gray-600 transition-colors">
+                Contact
+              </a>
+              <a href="/feedback" className="text-[#1A1A1A] text-[16px] font-medium hover:text-gray-600 transition-colors">
+                Feedback
+              </a>
+            </div>
+
+            {/* Copyright */}
+            <p className="text-[#999999] text-[14px]">
+              Zuma LLC 2025. All rights reserved
+            </p>
           </div>
         </div>
       </footer>
