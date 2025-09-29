@@ -15,8 +15,29 @@ export function AccountMenu({ className }: AccountMenuProps) {
   const { user, signOut } = useAuth()
   const router = useRouter()
   const [selectedTheme, setSelectedTheme] = React.useState<'light' | 'dark' | 'system'>('system')
+  const [isLoggingOut, setIsLoggingOut] = React.useState(false)
+  const [displayName, setDisplayName] = React.useState<string>('')
+
+  // Load user name from localStorage
+  const loadUserName = React.useCallback(() => {
+    if (user) {
+      const savedProfile = localStorage.getItem(`profile_${user.id}`)
+      if (savedProfile) {
+        try {
+          const profileData = JSON.parse(savedProfile)
+          setDisplayName(profileData.name || user.name || 'User')
+        } catch {
+          setDisplayName(user.name || 'User')
+        }
+      } else {
+        setDisplayName(user.name || 'User')
+      }
+    }
+  }, [user])
 
   React.useEffect(() => {
+    loadUserName()
+    
     // Just read the current theme state, don't set it (ThemeInitializer handles that)
     const getCurrentTheme = () => {
       const savedTheme = localStorage.getItem("theme") as "light" | "dark" | null
@@ -28,7 +49,23 @@ export function AccountMenu({ className }: AccountMenuProps) {
     }
 
     getCurrentTheme()
-  }, [user?.id])
+  }, [user?.id, loadUserName])
+  
+  // Listen for storage changes
+  React.useEffect(() => {
+    const handleStorageChange = () => {
+      loadUserName()
+    }
+    
+    window.addEventListener('storage', handleStorageChange)
+    // Also listen for focus to catch updates from same tab
+    window.addEventListener('focus', handleStorageChange)
+    
+    return () => {
+      window.removeEventListener('storage', handleStorageChange)
+      window.removeEventListener('focus', handleStorageChange)
+    }
+  }, [loadUserName])
 
   const handleThemeChange = async (theme: 'light' | 'dark' | 'system') => {
     console.log('🎨 Changing theme to:', theme)
@@ -64,25 +101,45 @@ export function AccountMenu({ className }: AccountMenuProps) {
   }
 
   const handleSignOut = async () => {
+    if (isLoggingOut) return // Prevent multiple clicks
+    
+    setIsLoggingOut(true)
+    console.log('Starting logout process...')
+    
+    // Set a timeout to force logout after 3 seconds if it hangs
+    const forceLogout = setTimeout(() => {
+      console.log('Logout timeout, forcing redirect...')
+      localStorage.clear()
+      window.location.href = '/login'
+    }, 3000)
+    
     try {
-      console.log('Starting logout process...')
-      
       // Clear demo mode if it exists
       localStorage.removeItem('demo_mode')
       localStorage.removeItem('demo_user')
       localStorage.removeItem('just_logged_in')
       
-      // Sign out from auth service
+      // Try to sign out from auth service with timeout
       console.log('Calling signOut...')
-      await signOut()
+      const signOutPromise = signOut()
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('SignOut timeout')), 2000)
+      )
+      
+      await Promise.race([signOutPromise, timeoutPromise])
       
       console.log('SignOut completed, redirecting...')
+      clearTimeout(forceLogout)
       
-      // Force navigation to login page
+      // Immediate redirect
       window.location.href = '/login'
+      
     } catch (error) {
       console.error('Error signing out:', error)
-      // Even if there's an error, try to redirect to login
+      clearTimeout(forceLogout)
+      
+      // Clear local state manually and redirect
+      localStorage.clear()
       window.location.href = '/login'
     }
   }
@@ -98,7 +155,7 @@ export function AccountMenu({ className }: AccountMenuProps) {
           className="text-white text-[15px] font-semibold mb-0.5"
           style={{ letterSpacing: '-0.03em' }}
         >
-          {user?.name || 'User'}
+          {displayName || 'User'}
         </h3>
         <p 
           className="text-white/50 text-[15px] font-semibold"
@@ -180,7 +237,7 @@ export function AccountMenu({ className }: AccountMenuProps) {
           Pricing
         </button>
         <button 
-          onClick={() => window.open('https://github.com/anthropics/claude-code/issues', '_blank')}
+          onClick={() => router.push('/feedback')}
           className="w-full flex items-center gap-3 px-3 py-3 text-left text-white text-[15px] font-semibold hover:bg-white/10 rounded-lg transition-colors" 
           style={{ letterSpacing: '-0.03em' }}
         >
@@ -189,11 +246,14 @@ export function AccountMenu({ className }: AccountMenuProps) {
         </button>
         <button 
           onClick={handleSignOut}
-          className="w-full flex items-center gap-3 px-3 py-3 text-left text-white text-[15px] font-semibold hover:bg-white/10 rounded-lg transition-colors" 
+          disabled={isLoggingOut}
+          className={`w-full flex items-center gap-3 px-3 py-3 text-left text-white text-[15px] font-semibold rounded-lg transition-colors ${
+            isLoggingOut ? 'opacity-50 cursor-not-allowed' : 'hover:bg-white/10'
+          }`}
           style={{ letterSpacing: '-0.03em' }}
         >
           <LogOut className="w-4 h-4" />
-          Log out
+          {isLoggingOut ? 'Logging out...' : 'Log out'}
         </button>
       </div>
 
@@ -202,10 +262,16 @@ export function AccountMenu({ className }: AccountMenuProps) {
 
       {/* Terms and Privacy */}
       <div className="flex items-center gap-4">
-        <button className="text-white/70 text-[12px] font-medium hover:text-white transition-colors">
+        <button 
+          onClick={() => router.push('/terms')}
+          className="text-white/70 text-[12px] font-medium hover:text-white transition-colors"
+        >
           Terms
         </button>
-        <button className="text-white/70 text-[12px] font-medium hover:text-white transition-colors">
+        <button 
+          onClick={() => router.push('/privacy')}
+          className="text-white/70 text-[12px] font-medium hover:text-white transition-colors"
+        >
           Privacy
         </button>
       </div>

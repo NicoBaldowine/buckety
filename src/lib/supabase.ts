@@ -172,6 +172,7 @@ export interface AutoDeposit {
   end_date?: string
   status: 'active' | 'paused' | 'completed' | 'cancelled'
   next_execution_date: string
+  last_executed_at?: string
   created_at: string
   updated_at: string
 }
@@ -920,6 +921,40 @@ export const autoDepositService = {
       }
       
       console.log('✅ Auto deposit created successfully in database:', data)
+      
+      // Create "Auto deposit started" activity
+      try {
+        console.log('📝 Creating "Auto deposit started" activity for bucket:', autoDeposit.bucket_id)
+        const bucket = await bucketService.getBucket(autoDeposit.bucket_id)
+        console.log('📝 Found bucket:', bucket?.title)
+        
+        const now = new Date()
+        const activityData = {
+          bucket_id: autoDeposit.bucket_id,
+          title: 'Auto deposit started',
+          amount: 0, // No amount for start notification
+          activity_type: 'auto_deposit_started' as ActivityType,
+          from_source: 'System',
+          to_destination: bucket?.title || 'Bucket',
+          date: now.toISOString().split('T')[0],
+          description: `Auto deposit of $${autoDeposit.amount} ${autoDeposit.repeat_type} started`,
+          user_id: autoDeposit.user_id
+        }
+        
+        console.log('📝 Activity data:', activityData)
+        const activityResult = await activityService.createActivity(activityData)
+        console.log('📝 Activity creation result:', activityResult)
+        
+        if (activityResult) {
+          console.log('✅ Created "Auto deposit started" activity successfully')
+        } else {
+          console.warn('⚠️ Activity creation returned null/false')
+        }
+      } catch (activityError) {
+        console.error('❌ Could not create auto deposit started activity:', activityError)
+        // Don't fail the whole operation if activity creation fails
+      }
+      
       return data
     } catch (error) {
       console.error('❌ Unexpected error creating auto deposit:', error)
@@ -1166,6 +1201,10 @@ export const autoDepositService = {
         console.log(`⏰ Is due? ${new Date(d.next_execution_date) <= now}`)
       })
       
+      // Query for due deposits with additional safety check
+      // Only execute if next_execution_date is in the past AND hasn't been executed in the last 23 hours
+      const twentyThreeHoursAgo = new Date(now.getTime() - (23 * 60 * 60 * 1000))
+      
       let query = supabase
         .from('auto_deposits')
         .select('*')
@@ -1190,17 +1229,43 @@ export const autoDepositService = {
         return { success: true, executed: 0 }
       }
       
-      console.log(`📋 Found ${dueDeposits.length} auto deposits due for execution:`, dueDeposits.map(d => ({
+      // Filter out deposits that were executed recently (within last 23 hours) to prevent duplicates
+      // This only works if the last_executed_at column exists in the database
+      const safeDeposits = dueDeposits.filter(d => {
+        // If the column doesn't exist, d.last_executed_at will be undefined
+        if (!d.last_executed_at || d.last_executed_at === undefined) return true // Never executed or column doesn't exist, safe to run
+        
+        try {
+          const lastExecution = new Date(d.last_executed_at)
+          const hoursSinceLastExecution = (now.getTime() - lastExecution.getTime()) / (1000 * 60 * 60)
+          const isSafe = hoursSinceLastExecution >= 23
+          if (!isSafe) {
+            console.log(`⏸️ Skipping auto-deposit ${d.id} - executed ${hoursSinceLastExecution.toFixed(1)} hours ago (needs 23+ hours)`)
+          }
+          return isSafe
+        } catch (e) {
+          // If there's any error parsing the date, allow execution
+          return true
+        }
+      })
+      
+      if (safeDeposits.length === 0) {
+        console.log('📅 No auto deposits safe to execute (all executed recently)')
+        return { success: true, executed: 0 }
+      }
+      
+      console.log(`📋 Found ${safeDeposits.length} auto deposits safe for execution:`, safeDeposits.map(d => ({
         id: d.id,
         amount: d.amount,
         bucket_id: d.bucket_id,
         next_execution_date: d.next_execution_date,
+        last_executed_at: d.last_executed_at,
         repeat_type: d.repeat_type
       })))
       
       let executedCount = 0
       
-      for (const autoDeposit of dueDeposits) {
+      for (const autoDeposit of safeDeposits) {
         try {
           // Check if bucket is completed
           const bucket = await bucketService.getBucket(autoDeposit.bucket_id)
@@ -1271,20 +1336,25 @@ export const autoDepositService = {
               bucket_id: autoDeposit.bucket_id
             })
             
-            // Calculate next execution date
+            // Calculate next execution date - IMPORTANT: Use a fixed time to avoid drift
+            // Always set to the same time of day to ensure exactly 24 hours between executions
             const nextDate = new Date(autoDeposit.next_execution_date)
+            
+            // Reset to beginning of day and add the interval
+            nextDate.setHours(0, 0, 0, 0) // Reset to midnight
+            
             switch (autoDeposit.repeat_type) {
               case 'daily':
-                nextDate.setDate(nextDate.getDate() + 1) // Daily = 24 hours
+                nextDate.setDate(nextDate.getDate() + 1) // Exactly 1 day later at midnight
                 break
               case 'weekly':
-                nextDate.setDate(nextDate.getDate() + 7)
+                nextDate.setDate(nextDate.getDate() + 7) // Exactly 7 days later
                 break
               case 'biweekly':
-                nextDate.setDate(nextDate.getDate() + 14)
+                nextDate.setDate(nextDate.getDate() + 14) // Exactly 14 days later
                 break
               case 'monthly':
-                nextDate.setMonth(nextDate.getMonth() + 1)
+                nextDate.setMonth(nextDate.getMonth() + 1) // Next month, same day
                 break
               case 'custom':
                 if (autoDeposit.repeat_every_days) {
@@ -1293,11 +1363,27 @@ export const autoDepositService = {
                 break
             }
             
+            // Add a small offset to ensure it runs early in the day but not at exact midnight
+            nextDate.setHours(1, 0, 0, 0) // Set to 1 AM to avoid timezone issues
+            
             // Update next execution date immediately to prevent duplicate executions
+            // Try to update last_executed_at if the column exists, otherwise just update next_execution_date
             console.log(`⏰ Updating next execution from ${autoDeposit.next_execution_date} to ${nextDate.toISOString()}`)
-            const updateResult = await this.updateAutoDeposit(autoDeposit.id, {
-              next_execution_date: nextDate.toISOString()
+            
+            // First try with both fields
+            let updateResult = await this.updateAutoDeposit(autoDeposit.id, {
+              next_execution_date: nextDate.toISOString(),
+              last_executed_at: now.toISOString()
             })
+            
+            // If it failed, try without last_executed_at (column might not exist yet)
+            if (!updateResult) {
+              console.log('⚠️ Falling back to update without last_executed_at')
+              updateResult = await this.updateAutoDeposit(autoDeposit.id, {
+                next_execution_date: nextDate.toISOString()
+              })
+            }
+            
             console.log(`📝 Update result:`, updateResult ? 'SUCCESS' : 'FAILED')
             
             executedCount++

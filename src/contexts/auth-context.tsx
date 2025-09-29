@@ -149,8 +149,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const currentUser = user
     
     try {
-      // Call Supabase signOut silently
-      await authService.signOut()
+      // Call Supabase signOut and wait for completion
+      const result = await authService.signOut()
       
       // Clear user-specific localStorage data (only on client side)
       if (typeof window !== 'undefined') {
@@ -164,10 +164,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         localStorage.removeItem('mainBucket')
       }
       
-      setUser(null)
-      setSession(null)
+      // Only clear state after successful logout
+      if (result.success) {
+        setUser(null)
+        setSession(null)
+      } else {
+        throw new Error(result.error || 'Logout failed')
+      }
+      
     } catch (error) {
-      // Even if there's an error, clear the local state silently
+      console.error('SignOut error in auth context:', error)
+      // Even if there's an error, clear the local state
       setUser(null)
       setSession(null)
       throw error

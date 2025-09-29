@@ -42,6 +42,7 @@ function EditAutoDepositContent() {
   const [isSaving, setIsSaving] = useState(false)
   const [isCanceling, setIsCanceling] = useState(false)
   const [showCancelModal, setShowCancelModal] = useState(false)
+  const [lastExecutionTime, setLastExecutionTime] = useState<string | null>(null)
   
   const [isTyping, setIsTyping] = useState(false)
   const [hasInsufficientBalance, setHasInsufficientBalance] = useState(false)
@@ -141,6 +142,14 @@ function EditAutoDepositContent() {
               setEndType(deposit.end_type === 'specific_date' ? 'custom_date' : 'bucket_completed')
               if (deposit.end_date) {
                 setCustomDate(deposit.end_date.split('T')[0])
+              }
+              
+              // Store last execution time for daily deposits (for testing)
+              if (deposit.repeat_type === 'daily' && deposit.next_execution_date) {
+                // Calculate last execution based on next execution (2 minutes before for daily)
+                const nextExec = new Date(deposit.next_execution_date)
+                const lastExec = new Date(nextExec.getTime() - 2 * 60 * 1000)
+                setLastExecutionTime(lastExec.toLocaleTimeString())
               }
             }
           } catch {
@@ -462,6 +471,13 @@ function EditAutoDepositContent() {
                 <SelectItem value="biweekly">Bi-weekly</SelectItem>
                 <SelectItem value="monthly">Monthly</SelectItem>
               </Select>
+              
+              {/* Show last execution time for daily deposits */}
+              {frequency === 'daily' && lastExecutionTime && (
+                <div className="mt-2 text-[10px] text-foreground/50">
+                  Last executed: {lastExecutionTime}
+                </div>
+              )}
             </div>
 
             {/* End Date Dropdown */}

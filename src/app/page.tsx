@@ -515,7 +515,7 @@ export default function LandingPage() {
         @media (max-width: 768px) {
           .bucket-card {
             width: 140px !important;
-            height: 65px !important;
+            height: 70px !important;
           }
           
           .bucket-content {
@@ -527,7 +527,7 @@ export default function LandingPage() {
           }
           
           .bucket-content .progress-container {
-            height: 18px !important;
+            height: 24px !important;
           }
           
           .progress-text {
@@ -1060,7 +1060,7 @@ export default function LandingPage() {
           </div>
 
           {/* Mobile Layout */}
-          <div className="md:hidden">
+          <div className="md:hidden pl-5">
             {/* Logo */}
             <div className="mb-8">
               <div className="relative w-44 h-14">
@@ -1074,23 +1074,23 @@ export default function LandingPage() {
             </div>
 
             {/* All Links Aligned Left */}
-            <div className="flex flex-col space-y-6 mb-10">
-              <a href="/pricing" className="text-[#1A1A1A] text-[16px] font-medium hover:text-gray-600 transition-colors">
+            <div className="flex flex-col space-y-8 mb-12">
+              <a href="/pricing" className="text-[#1A1A1A] text-[18px] font-medium hover:text-gray-600 transition-colors leading-relaxed">
                 Pricing
               </a>
-              <a href="/terms" className="text-[#1A1A1A] text-[16px] font-medium hover:text-gray-600 transition-colors">
+              <a href="/terms" className="text-[#1A1A1A] text-[18px] font-medium hover:text-gray-600 transition-colors leading-relaxed">
                 Terms
               </a>
-              <a href="/about" className="text-[#1A1A1A] text-[16px] font-medium hover:text-gray-600 transition-colors">
+              <a href="/about" className="text-[#1A1A1A] text-[18px] font-medium hover:text-gray-600 transition-colors leading-relaxed">
                 About us
               </a>
-              <a href="/privacy" className="text-[#1A1A1A] text-[16px] font-medium hover:text-gray-600 transition-colors">
+              <a href="/privacy" className="text-[#1A1A1A] text-[18px] font-medium hover:text-gray-600 transition-colors leading-relaxed">
                 Privacy
               </a>
-              <a href="/contact" className="text-[#1A1A1A] text-[16px] font-medium hover:text-gray-600 transition-colors">
+              <a href="/contact" className="text-[#1A1A1A] text-[18px] font-medium hover:text-gray-600 transition-colors leading-relaxed">
                 Contact
               </a>
-              <a href="/feedback" className="text-[#1A1A1A] text-[16px] font-medium hover:text-gray-600 transition-colors">
+              <a href="/feedback" className="text-[#1A1A1A] text-[18px] font-medium hover:text-gray-600 transition-colors leading-relaxed">
                 Feedback
               </a>
             </div>

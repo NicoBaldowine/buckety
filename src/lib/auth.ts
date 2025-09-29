@@ -295,5 +295,19 @@ export const authService = {
       console.error('💥 Password update error:', error)
       return { success: false, error: 'Failed to update password. Please try again.' }
     }
+  },
+
+  // Update user profile (name)
+  async updateUserProfile(updates: { name?: string }) {
+    const { data, error } = await supabase.auth.updateUser({
+      data: updates
+    })
+    
+    if (error) {
+      console.error('Profile update error:', error)
+      return { success: false, error: error.message }
+    }
+    
+    return { success: true, user: data.user }
   }
 }

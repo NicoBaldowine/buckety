@@ -382,7 +382,7 @@ function HomePageContent() {
         })
       }
     }
-  }, [buckets, user])
+  }, [buckets, user, mainBucketAmount])
   
   // Auto-deposits are now handled by server-side cron jobs
   // This useEffect is disabled to avoid conflicts with server execution
@@ -583,8 +583,9 @@ function HomePageContent() {
       if (buckets.length > 0 && user) {
         // Execute auto deposits (temporary for testing until server cron is deployed)
         try {
-          console.log('🔄 Checking for auto deposits to execute...')
+          console.log('🔄 Checking for auto deposits to execute...', new Date().toISOString())
           const result = await autoDepositService.executeAutoDeposits(user.id)
+          console.log('🔄 Auto-deposit check result:', result)
           if (result.executed > 0) {
             console.log(`✅ Executed ${result.executed} auto-deposits`)
             // Refresh buckets to show updated amounts
@@ -601,9 +602,11 @@ function HomePageContent() {
               setBuckets(transformedBuckets)
               localStorage.setItem(`buckets_${user.id}`, JSON.stringify(transformedBuckets))
             }
+          } else {
+            console.log('📅 No auto-deposits executed this check')
           }
         } catch (error) {
-          console.warn('Auto-deposit execution error:', error)
+          console.error('Auto-deposit execution error:', error)
         }
         
         const autoDepositChecks = await Promise.all(
@@ -639,19 +642,25 @@ function HomePageContent() {
       }
     }
     
-    // Execute immediately on mount
-    checkAndExecuteAutoDeposits()
+    // Auto-deposit execution - now with proper safeguards
+    // Only check once on mount, then every 4 hours (will move to server-side cron job)
     
-    // Then check every 30 seconds
-    const interval = setInterval(checkAndExecuteAutoDeposits, 30000) // Check every 30 seconds for testing
+    // Execute after a delay to avoid initial load issues
+    const executeTimeout = setTimeout(() => {
+      checkAndExecuteAutoDeposits()
+    }, 5000) // Wait 5 seconds after mount
+    
+    // Then check every 4 hours (reduced frequency to prevent overload)
+    const interval = setInterval(checkAndExecuteAutoDeposits, 4 * 60 * 60 * 1000) // Check every 4 hours
     
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange)
       window.removeEventListener('focus', handleWindowFocus)
       window.removeEventListener('storage', handleStorageChange)
+      clearTimeout(executeTimeout)
       clearInterval(interval)
     }
-  }, [user, buckets, autoDepositBuckets])
+  }, [user, buckets]) // Removed autoDepositBuckets to prevent infinite re-renders
 
   // Listen for localStorage changes (e.g., when buckets are deleted)
   useEffect(() => {
@@ -756,6 +765,7 @@ function HomePageContent() {
             <Button variant="secondary" onClick={() => router.push('/add-money')}>
               Move money
             </Button>
+            
           </div>
           <AvatarDropdown initial={user?.name?.charAt(0) || user?.email?.charAt(0) || "U"} />
         </div>

@@ -97,7 +97,7 @@ const BucketCard = React.forwardRef<HTMLDivElement, BucketCardProps>(
         {/* Progress bar */}
         <div className="relative">
           <Progress value={progress} max={100} className="w-full" backgroundColor={backgroundColor} />
-          {progress < 100 && (
+          {progress < 90 && (
             <div 
               className="absolute top-1/2 transform -translate-y-1/2 pointer-events-none"
               style={{ left: `max(calc(${progress}% + 8px), 16px)` }}
