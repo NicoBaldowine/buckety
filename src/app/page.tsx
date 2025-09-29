@@ -514,20 +514,20 @@ export default function LandingPage() {
         /* Mobile bucket cards */
         @media (max-width: 768px) {
           .bucket-card {
-            width: 160px !important;
-            height: 75px !important;
+            width: 140px !important;
+            height: 65px !important;
           }
           
           .bucket-content {
-            padding: 10px 12px !important;
+            padding: 8px 10px !important;
           }
           
           .bucket-content span:first-child {
-            font-size: 12px !important;
+            font-size: 11px !important;
           }
           
           .bucket-content .progress-container {
-            height: 22px !important;
+            height: 18px !important;
           }
           
           .progress-text {
@@ -1062,7 +1062,7 @@ export default function LandingPage() {
           {/* Mobile Layout */}
           <div className="md:hidden">
             {/* Logo */}
-            <div className="mb-4">
+            <div className="mb-8">
               <div className="relative w-44 h-14">
                 <Image 
                   src="/zuma-light.svg" 
@@ -1074,7 +1074,7 @@ export default function LandingPage() {
             </div>
 
             {/* All Links Aligned Left */}
-            <div className="flex flex-col space-y-4 mb-8">
+            <div className="flex flex-col space-y-6 mb-10">
               <a href="/pricing" className="text-[#1A1A1A] text-[16px] font-medium hover:text-gray-600 transition-colors">
                 Pricing
               </a>
