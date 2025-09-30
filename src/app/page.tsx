@@ -216,7 +216,7 @@ export default function LandingPage() {
         <div className="max-w-[1400px] mx-auto w-full flex-1 flex flex-col">
 
         {/* Main Content with Buckets */}
-        <main className="flex-1 flex items-center justify-center py-2 md:py-8 relative" style={{ marginTop: '-150px' }}>
+        <main className="flex-1 flex items-center justify-center py-2 md:py-32 relative" style={{ marginTop: '-150px' }}>
           {/* Animated Bucket Cards around the title - Both Desktop and Mobile */}
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
             {/* Cancun Trip */}
@@ -224,8 +224,8 @@ export default function LandingPage() {
               className="absolute bucket-card pointer-events-auto bucket-scroll-animation"
               data-bucket-index="0"
               style={{
-                top: '120px',
-                left: '10px',
+                top: '180px',
+                left: '60px',
                 zIndex: 20,
                 '--delay': '0.8s',
                 '--color': '#B6F3AD',
@@ -249,8 +249,8 @@ export default function LandingPage() {
               className="absolute bucket-card pointer-events-auto bucket-scroll-animation"
               data-bucket-index="1"
               style={{
-                top: '120px',
-                right: '10px',
+                top: '180px',
+                right: '60px',
                 zIndex: 20,
                 '--delay': '1.0s',
                 '--color': '#FFDA2A',

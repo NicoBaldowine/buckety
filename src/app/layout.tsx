@@ -11,7 +11,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Buckety",
+  title: "Zuma - Your modern saving account",
   description: "Smart savings with goal-based buckets",
 };
 
