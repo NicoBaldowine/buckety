@@ -171,7 +171,7 @@ export default function LandingPage() {
         >
           {/* Mobile Logo - Fixed position closer to edges */}
           <div className="md:hidden absolute top-3 left-1 z-40">
-            <div className="relative w-44 h-14">
+            <div className="relative w-36 h-11">
               <Image 
                 src="/zuma-light.svg" 
                 alt="Zuma Logo" 
@@ -183,7 +183,7 @@ export default function LandingPage() {
           
           {/* Desktop Logo */}
           <div className="hidden md:flex items-center">
-            <div className="relative w-44 h-14">
+            <div className="relative w-36 h-11">
               <Image 
                 src="/zuma-light.svg" 
                 alt="Zuma Logo" 
@@ -216,7 +216,7 @@ export default function LandingPage() {
         <div className="max-w-[1400px] mx-auto w-full flex-1 flex flex-col">
 
         {/* Main Content with Buckets */}
-        <main className="flex-1 flex items-center justify-center py-8 relative">
+        <main className="flex-1 flex items-center justify-center py-2 md:py-8 relative" style={{ marginTop: '-150px' }}>
           {/* Animated Bucket Cards around the title - Both Desktop and Mobile */}
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
             {/* Cancun Trip */}
@@ -259,7 +259,7 @@ export default function LandingPage() {
             >
               <div className="bucket-content" style={{ backgroundColor: 'var(--color)' }}>
                 <div className="flex items-center gap-2 mb-2">
-                  <span className="text-[16px] font-extrabold text-black" style={{ letterSpacing: '-0.04em' }}>Laksik Procedure</span>
+                  <span className="text-[16px] font-extrabold text-black" style={{ letterSpacing: '-0.04em' }}>Eyes Procedure</span>
                   <span className="text-[20px]">👁️</span>
                 </div>
                 <div className="progress-container" style={{ height: '24px', borderRadius: '6px' }}>
@@ -387,10 +387,10 @@ export default function LandingPage() {
               <span className="hidden md:block">SAVING ACCOUNT</span>
               
               {/* Mobile: 4 lines */}
-              <span className="block md:hidden" style={{ fontSize: 'clamp(80px, 24vw, 120px)' }}>YOUR</span>
-              <span className="block md:hidden" style={{ fontSize: 'clamp(80px, 24vw, 120px)' }}>MODERN</span>
-              <span className="block md:hidden" style={{ fontSize: 'clamp(80px, 24vw, 120px)' }}>SAVING</span>
-              <span className="block md:hidden" style={{ fontSize: 'clamp(80px, 24vw, 120px)' }}>ACCOUNT</span>
+              <span className="block md:hidden" style={{ fontSize: 'clamp(90px, 26vw, 140px)' }}>YOUR</span>
+              <span className="block md:hidden" style={{ fontSize: 'clamp(90px, 26vw, 140px)' }}>MODERN</span>
+              <span className="block md:hidden" style={{ fontSize: 'clamp(90px, 26vw, 140px)' }}>SAVING</span>
+              <span className="block md:hidden" style={{ fontSize: 'clamp(90px, 26vw, 140px)' }}>ACCOUNT</span>
             </h1>
           </div>
         </main>
@@ -516,6 +516,37 @@ export default function LandingPage() {
           .bucket-card {
             width: 140px !important;
             height: 70px !important;
+          }
+
+          /* Mobile-specific positioning - 5 buckets: 2 top, 1 middle, 2 bottom */
+          .bucket-card[data-bucket-index="0"] {
+            top: 210px !important;
+            left: 5px !important;
+          }
+          
+          .bucket-card[data-bucket-index="1"] {
+            top: 190px !important;
+            right: 15px !important;
+          }
+          
+          .bucket-card[data-bucket-index="2"] {
+            top: 48% !important;
+            left: 50% !important;
+            transform: translateX(-50%) translateY(-50%) !important;
+          }
+          
+          .bucket-card[data-bucket-index="3"] {
+            display: none !important;
+          }
+          
+          .bucket-card[data-bucket-index="4"] {
+            bottom: 230px !important;
+            left: 15px !important;
+          }
+          
+          .bucket-card[data-bucket-index="5"] {
+            bottom: 250px !important;
+            right: 5px !important;
           }
           
           .bucket-content {
@@ -683,7 +714,7 @@ export default function LandingPage() {
               }}
             >
               <div 
-                className="w-full md:max-w-[545px] aspect-[545/508] md:w-[545px] md:h-[508px]"
+                className="w-full md:max-w-[545px] aspect-[545/508] md:w-[545px] md:h-[508px] relative"
                 style={{ 
                   backgroundColor: '#1A1A1A',
                   borderRadius: '20px',
@@ -692,6 +723,12 @@ export default function LandingPage() {
                   justifyContent: 'center'
                 }}
               >
+                <Image 
+                  src="/images/buckets.svg" 
+                  alt="Custom Buckets" 
+                  fill
+                  className="object-contain p-6"
+                />
               </div>
             </div>
 
@@ -778,52 +815,12 @@ export default function LandingPage() {
                   justifyContent: 'center'
                 }}
               >
-                {/* Animated Orbit Visualization */}
-                <div className="orbit-container relative w-full h-full flex items-center justify-center">
-                  {/* Concentric Circles */}
-                  <div className="orbit-circle" style={{ '--size': '80px', '--opacity': '1', '--color': '#E8E7E7' } as React.CSSProperties}></div>
-                  <div className="orbit-circle" style={{ '--size': '140px', '--opacity': '1', '--color': '#D9D8D8' } as React.CSSProperties}></div>
-                  <div className="orbit-circle" style={{ '--size': '200px', '--opacity': '0.8', '--color': '#CFCFCF' } as React.CSSProperties}></div>
-                  <div className="orbit-circle" style={{ '--size': '260px', '--opacity': '0.6', '--color': '#C4C4C4' } as React.CSSProperties}></div>
-                  <div className="orbit-circle" style={{ '--size': '320px', '--opacity': '0.4', '--color': '#B8B8B8' } as React.CSSProperties}></div>
-                  <div className="orbit-circle" style={{ '--size': '380px', '--opacity': '0.25', '--color': '#AFAFAF' } as React.CSSProperties}></div>
-
-                  {/* Orbiting Bucket Cards - 5 buckets on different orbits */}
-                  <div className="orbiting-bucket" style={{ '--orbit': '140px', '--delay': '0s', '--color': '#B6F3AD' } as React.CSSProperties}>
-                    <div className="bucket-mini">
-                      <span className="bucket-icon">✈️</span>
-                      <span className="bucket-amount">+$120.00</span>
-                    </div>
-                  </div>
-
-                  <div className="orbiting-bucket" style={{ '--orbit': '100px', '--delay': '-2.4s', '--color': '#FFDA2A' } as React.CSSProperties}>
-                    <div className="bucket-mini">
-                      <span className="bucket-icon">🎮</span>
-                      <span className="bucket-amount">+$75.00</span>
-                    </div>
-                  </div>
-
-                  <div className="orbiting-bucket" style={{ '--orbit': '160px', '--delay': '-4.8s', '--color': '#31A7FE' } as React.CSSProperties}>
-                    <div className="bucket-mini">
-                      <span className="bucket-icon">⚽</span>
-                      <span className="bucket-amount">+$120.00</span>
-                    </div>
-                  </div>
-
-                  <div className="orbiting-bucket" style={{ '--orbit': '190px', '--delay': '-7.2s', '--color': '#ABE9FA' } as React.CSSProperties}>
-                    <div className="bucket-mini">
-                      <span className="bucket-icon">📷</span>
-                      <span className="bucket-amount">+$400.00</span>
-                    </div>
-                  </div>
-
-                  <div className="orbiting-bucket" style={{ '--orbit': '175px', '--delay': '-9.6s', '--color': '#FF7261' } as React.CSSProperties}>
-                    <div className="bucket-mini">
-                      <span className="bucket-icon">👁️</span>
-                      <span className="bucket-amount">+$350.00</span>
-                    </div>
-                  </div>
-                </div>
+                <Image 
+                  src="/images/radio.svg" 
+                  alt="Mirror Account" 
+                  fill
+                  className="object-contain p-6"
+                />
               </div>
             </div>
           </div>
@@ -849,7 +846,7 @@ export default function LandingPage() {
               }}
             >
               <div 
-                className="w-full md:max-w-[545px] aspect-[545/508] md:w-[545px] md:h-[508px]"
+                className="w-full md:max-w-[545px] aspect-[545/508] md:w-[545px] md:h-[508px] relative"
                 style={{ 
                   backgroundColor: '#1A1A1A',
                   borderRadius: '20px',
@@ -858,6 +855,12 @@ export default function LandingPage() {
                   justifyContent: 'center'
                 }}
               >
+                <Image 
+                  src="/images/logos.svg" 
+                  alt="Marketplace" 
+                  fill
+                  className="object-contain p-6"
+                />
               </div>
             </div>
 
@@ -1018,7 +1021,7 @@ export default function LandingPage() {
             {/* Left side - Logo and Copyright */}
             <div>
               <div className="mb-8">
-                <div className="relative w-44 h-14">
+                <div className="relative w-36 h-11">
                   <Image 
                     src="/zuma-light.svg" 
                     alt="Zuma Logo" 
@@ -1063,7 +1066,7 @@ export default function LandingPage() {
           <div className="md:hidden pl-5">
             {/* Logo */}
             <div className="mb-8">
-              <div className="relative w-44 h-14">
+              <div className="relative w-36 h-11">
                 <Image 
                   src="/zuma-light.svg" 
                   alt="Zuma Logo" 
@@ -1075,22 +1078,22 @@ export default function LandingPage() {
 
             {/* All Links Aligned Left */}
             <div className="flex flex-col space-y-8 mb-12">
-              <a href="/pricing" className="text-[#1A1A1A] text-[18px] font-medium hover:text-gray-600 transition-colors leading-relaxed">
+              <a href="/pricing" className="text-[#1A1A1A] text-[14px] font-medium hover:text-gray-600 transition-colors leading-relaxed">
                 Pricing
               </a>
-              <a href="/terms" className="text-[#1A1A1A] text-[18px] font-medium hover:text-gray-600 transition-colors leading-relaxed">
+              <a href="/terms" className="text-[#1A1A1A] text-[14px] font-medium hover:text-gray-600 transition-colors leading-relaxed">
                 Terms
               </a>
-              <a href="/about" className="text-[#1A1A1A] text-[18px] font-medium hover:text-gray-600 transition-colors leading-relaxed">
+              <a href="/about" className="text-[#1A1A1A] text-[14px] font-medium hover:text-gray-600 transition-colors leading-relaxed">
                 About us
               </a>
-              <a href="/privacy" className="text-[#1A1A1A] text-[18px] font-medium hover:text-gray-600 transition-colors leading-relaxed">
+              <a href="/privacy" className="text-[#1A1A1A] text-[14px] font-medium hover:text-gray-600 transition-colors leading-relaxed">
                 Privacy
               </a>
-              <a href="/contact" className="text-[#1A1A1A] text-[18px] font-medium hover:text-gray-600 transition-colors leading-relaxed">
+              <a href="/contact" className="text-[#1A1A1A] text-[14px] font-medium hover:text-gray-600 transition-colors leading-relaxed">
                 Contact
               </a>
-              <a href="/feedback" className="text-[#1A1A1A] text-[18px] font-medium hover:text-gray-600 transition-colors leading-relaxed">
+              <a href="/feedback" className="text-[#1A1A1A] text-[14px] font-medium hover:text-gray-600 transition-colors leading-relaxed">
                 Feedback
               </a>
             </div>
