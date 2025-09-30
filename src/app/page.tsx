@@ -720,14 +720,15 @@ export default function LandingPage() {
                   borderRadius: '20px',
                   display: 'flex',
                   alignItems: 'center',
-                  justifyContent: 'center'
+                  justifyContent: 'center',
+                  overflow: 'hidden'
                 }}
               >
                 <Image 
-                  src="/images/buckets.svg" 
+                  src="/image1.png" 
                   alt="Custom Buckets" 
                   fill
-                  className="object-contain p-6"
+                  className="object-cover"
                 />
               </div>
             </div>
@@ -812,14 +813,15 @@ export default function LandingPage() {
                   borderRadius: '20px',
                   display: 'flex',
                   alignItems: 'center',
-                  justifyContent: 'center'
+                  justifyContent: 'center',
+                  overflow: 'hidden'
                 }}
               >
                 <Image 
-                  src="/images/radio.svg" 
+                  src="/image2.png" 
                   alt="Mirror Account" 
                   fill
-                  className="object-contain p-6"
+                  className="object-cover"
                 />
               </div>
             </div>
@@ -852,14 +854,15 @@ export default function LandingPage() {
                   borderRadius: '20px',
                   display: 'flex',
                   alignItems: 'center',
-                  justifyContent: 'center'
+                  justifyContent: 'center',
+                  overflow: 'hidden'
                 }}
               >
                 <Image 
-                  src="/images/logos.svg" 
+                  src="/image3.png" 
                   alt="Marketplace" 
                   fill
-                  className="object-contain p-6"
+                  className="object-cover"
                 />
               </div>
             </div>
@@ -938,15 +941,22 @@ export default function LandingPage() {
               }}
             >
               <div 
-                className="w-full md:max-w-[545px] aspect-[545/508] md:w-[545px] md:h-[508px]"
+                className="w-full md:max-w-[545px] aspect-[545/508] md:w-[545px] md:h-[508px] relative"
                 style={{ 
                   backgroundColor: '#F0D000',
                   borderRadius: '20px',
                   display: 'flex',
                   alignItems: 'center',
-                  justifyContent: 'center'
+                  justifyContent: 'center',
+                  overflow: 'hidden'
                 }}
               >
+                <Image 
+                  src="/image4.png" 
+                  alt="Automation" 
+                  fill
+                  className="object-cover"
+                />
               </div>
             </div>
           </div>
