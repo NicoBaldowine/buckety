@@ -922,7 +922,7 @@ function BucketDetailsContent() {
         {/* Header with navigation and actions */}
         <div 
           ref={headerRef}
-          className="flex items-center justify-between mb-12"
+          className="flex items-center justify-between mb-6 md:mb-12"
           style={{ animation: 'slideInFromTop 0.4s ease-out 0.1s both' }}
         >
           <Button 
@@ -1017,7 +1017,7 @@ function BucketDetailsContent() {
 
         {/* Bucket title and amounts */}
         <div 
-          className="mb-6 relative mt-[70px]"
+          className="mb-6 relative mt-8 md:mt-[70px]"
           style={{ animation: 'fadeInUp 0.5s ease-out 0.2s both' }}
         >
           {/* Confetti explosion */}
@@ -1034,7 +1034,7 @@ function BucketDetailsContent() {
           
           {/* Title */}
           <h1 
-            className="text-[32px] font-extrabold text-black mb-0"
+            className="text-[20px] md:text-[32px] font-extrabold text-black mb-0"
             style={{ letterSpacing: '-0.05em' }}
           >
             {bucketData.title}
@@ -1045,12 +1045,12 @@ function BucketDetailsContent() {
             <div className="mb-2">
               <div className="flex items-baseline gap-1">
                 <span 
-                  className="text-[30px] font-semibold tracking-tight text-black"
+                  className="text-[16px] md:text-[30px] font-semibold tracking-tight text-black"
                 >
                   ${animatedCurrentAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </span>
                 <span 
-                  className="text-[30px] font-semibold tracking-tight text-black/40"
+                  className="text-[16px] md:text-[30px] font-semibold tracking-tight text-black/40"
                 >
                   of ${bucketData.targetAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </span>
@@ -1060,7 +1060,7 @@ function BucketDetailsContent() {
           {bucketData.id === 'main-bucket' && (
             <div className="mb-4">
               <span 
-                className="text-[30px] font-semibold tracking-tight text-black"
+                className="text-[16px] md:text-[30px] font-semibold tracking-tight text-black"
               >
                 ${animatedCurrentAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </span>
@@ -1071,7 +1071,7 @@ function BucketDetailsContent() {
         {/* Progress bar - only for savings buckets, not main bucket */}
         {bucketData.id !== 'main-bucket' && (
           <div 
-            className="mb-10 relative max-sm:mb-8 max-sm:-mt-2.5"
+            className="mb-4 md:mb-10 relative max-sm:-mt-2.5"
             style={{ animation: 'fadeInUp 0.5s ease-out 0.3s both' }}
           >
             <Progress 

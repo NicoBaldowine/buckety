@@ -13,11 +13,22 @@ const Progress = React.forwardRef<HTMLDivElement, ProgressProps>(
   ({ className, value = 0, max = 100, backgroundColor, isCompleted = false, showCompletionBadge = false, ...props }, ref) => {
     const percentage = Math.min(Math.max((value / max) * 100, 0), 100)
     const uniqueId = React.useId()
+    const [isMobile, setIsMobile] = React.useState(false)
+    
+    React.useEffect(() => {
+      const checkMobile = () => setIsMobile(window.innerWidth < 768)
+      checkMobile()
+      window.addEventListener('resize', checkMobile)
+      return () => window.removeEventListener('resize', checkMobile)
+    }, [])
+    
+    const barHeight = isMobile ? 28 : 38
+    const borderRadius = isMobile ? 6 : 8
     
     return (
       <div
         ref={ref}
-        className={cn("relative h-[40px] w-full", className)}
+        className={cn("relative h-[30px] md:h-[40px] w-full", className)}
         style={{ position: 'relative', zIndex: 1 }}
         {...props}
       >
@@ -45,8 +56,8 @@ const Progress = React.forwardRef<HTMLDivElement, ProgressProps>(
                 x="1"
                 y="1"
                 width={`calc(${percentage}% - 2px)`}
-                height="38"
-                rx="8"
+                height={barHeight}
+                rx={borderRadius}
               />
             </clipPath>
           </defs>
@@ -56,8 +67,8 @@ const Progress = React.forwardRef<HTMLDivElement, ProgressProps>(
             x="1"
             y="1"
             width="calc(100% - 2px)"
-            height="38"
-            rx="8"
+            height={barHeight}
+            rx={borderRadius}
             fill="#000000"
             fillOpacity="0.1"
           />
@@ -68,8 +79,8 @@ const Progress = React.forwardRef<HTMLDivElement, ProgressProps>(
               x="1"
               y="1"
               width="100%"
-              height="38"
-              rx="8"
+              height={barHeight}
+              rx={borderRadius}
               fill={`url(#diagonal-stripes-${uniqueId})`}
             />
           </g>
@@ -80,7 +91,7 @@ const Progress = React.forwardRef<HTMLDivElement, ProgressProps>(
               x1={`${percentage}%`}
               y1="1"
               x2={`${percentage}%`}
-              y2="39"
+              y2={barHeight + 1}
               stroke="#000000"
               strokeWidth="1"
             />
@@ -91,8 +102,8 @@ const Progress = React.forwardRef<HTMLDivElement, ProgressProps>(
             x="1"
             y="1"
             width="calc(100% - 2px)"
-            height="38"
-            rx="8"
+            height={barHeight}
+            rx={borderRadius}
             fill="none"
             stroke="#000000"
             strokeWidth="1"

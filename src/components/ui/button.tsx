@@ -16,7 +16,7 @@ const buttonVariants = cva(
         avatar: "bg-secondary text-secondary-foreground hover:bg-secondary/80 rounded-full button-border-theme button-shadow-theme",
       },
       size: {
-        default: "h-[45px] px-6 py-4 text-[15px] rounded-xl",
+        default: "h-[45px] px-4 md:px-6 py-4 text-[15px] rounded-xl",
         sm: "h-8 px-3 text-xs rounded-lg",
         icon: "h-[45px] w-[45px] p-0 rounded-xl",
         avatar: "h-[45px] w-[45px] p-0 text-[15px]",

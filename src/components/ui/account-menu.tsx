@@ -159,7 +159,7 @@ export function AccountMenu({ className }: AccountMenuProps) {
         </h3>
         <p 
           className="text-white/50 text-[15px] font-semibold"
-          style={{ letterSpacing: '-0.03em' }}
+          style={{ letterSpacing: '-0.03em', pointerEvents: 'none', userSelect: 'none' }}
         >
           {user?.email || 'user@example.com'}
         </p>

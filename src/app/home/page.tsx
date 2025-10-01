@@ -793,7 +793,7 @@ function HomePageContent() {
 
         {/* Main Bucket Card */}
         <div 
-          className="p-8 rounded-[24px] mb-4 cursor-pointer transition-all duration-300 ease-out relative z-0 main-bucket-card"
+          className="p-5 md:p-8 rounded-[20px] mb-4 cursor-pointer transition-all duration-300 ease-out relative z-0 main-bucket-card"
           style={{ 
             animation: 'fadeInUp 0.6s ease-out 0s both'
           }}
@@ -811,7 +811,7 @@ function HomePageContent() {
         >
           {/* Header with title - matching bucket card styling but theme-aware text */}
           <div className="mb-0">
-            <h3 className="text-[24px] font-extrabold text-foreground" style={{ letterSpacing: '-0.04em' }}>
+            <h3 className="text-[20px] md:text-[24px] font-extrabold text-foreground" style={{ letterSpacing: '-0.04em' }}>
               Main Bucket 🏦
             </h3>
           </div>
@@ -819,7 +819,7 @@ function HomePageContent() {
           {/* Amount section - matching bucket card styling but theme-aware text */}
           <div>
             <div className="flex items-baseline gap-1">
-              <span className="text-[20px] font-semibold tracking-tight text-foreground">
+              <span className="text-[16px] md:text-[20px] font-semibold tracking-tight text-foreground">
                 ${mainBucketAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </span>
             </div>

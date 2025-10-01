@@ -85,15 +85,15 @@ const ActivityListItem = React.forwardRef<HTMLDivElement, ActivityListItemProps>
         {/* Content */}
         <div className="flex-1 flex items-center justify-between">
           <div>
-            <h4 className="text-[16px] font-semibold text-black" style={{ letterSpacing: '-0.03em' }}>
+            <h4 className="text-[15px] md:text-[16px] font-semibold text-black" style={{ letterSpacing: '-0.03em' }}>
               {title}
             </h4>
-            <p className="text-[14px] font-medium text-black/50 mt-0.5" style={{ letterSpacing: '-0.03em' }}>
+            <p className="text-[13px] md:text-[14px] font-medium text-black/50 mt-0.5" style={{ letterSpacing: '-0.03em' }}>
               {date}
             </p>
           </div>
           {amount && (
-            <div className="text-[16px] font-semibold text-black" style={{ letterSpacing: '-0.03em' }}>
+            <div className="text-[15px] md:text-[16px] font-semibold text-black" style={{ letterSpacing: '-0.03em' }}>
               {amount}
             </div>
           )}
